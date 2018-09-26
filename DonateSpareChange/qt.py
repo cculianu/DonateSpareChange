@@ -128,7 +128,8 @@ class Instance(QWidget, PrintError):
             if en:
                 chk.setChecked(True)   
             def on_chkd(b,chk=chk,name=name):
-                self.print_error("Got chk from", chk, "=",b, "name=", name)
+                #self.print_error("Got chk from", chk, "=",b, "name=", name)
+                self.save()
             chk.toggled.connect(on_chkd)
 
         def reload(self):
@@ -162,6 +163,7 @@ class Instance(QWidget, PrintError):
         
         def on_item_changed(self, item, column):
             self.check_ok(item)
+            self.save()
             
         def on_minus(self):
             items = self.ui.tree_charities.selectedItems()
@@ -171,12 +173,25 @@ class Instance(QWidget, PrintError):
                     root = self.ui.tree_charities.invisibleRootItem()
                     for item in items:
                         root.removeChild(item) # item will get gc'd by Python
-                        
+                    self.save()  
             self.check_ok()
     
         def on_plus(self):
             i = self.ui.tree_charities.topLevelItemCount() + 1
             self.append_item((False, "Charity #%d"%i, "Charity Address %d"%i))
+            
+        def save(self):
+            items = self.ui.tree_charities.findItems("", Qt.MatchContains, 0)
+            charities = []
+            for item in items:
+                chk = self.ui.tree_charities.itemWidget(item, 0)
+                name, address = item.text(1), item.text(2)
+                #self.print_error("saving ", name, address)
+                enabled = False
+                if chk: enabled = bool(chk.isChecked()) # sometimes the checkbox is missing when the user just added a new item, and we get the signal too quickly
+                charities.append((enabled, name, address))
+            
+            self.data.set_charities(charities, save=True)
             
         
     # nested class.. handles writing our data dict to/from persisten store
@@ -217,6 +232,12 @@ class Instance(QWidget, PrintError):
         def get_charities(self):
             d = self.get_data()
             return d.get('charities', list())
+        
+        def set_charities(self, charities, save=save):
+            if isinstance(charities, list):
+                d = self.get_data()     
+                d['charities'] = charities
+                self.put_data(d, save=save)
             
         
     
