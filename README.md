@@ -13,7 +13,7 @@ If you wish to encourage further development (or even just show your appreciatio
 
   bitcoincash:qphax4s4n9h60jxj2fkrjs35w2tvgd4wzvf52cgtzc
   
-![Screenshot](https://github.com/cculianu/DonateSpareChange/raw/master/donate.png)
+![Screenshot](donate.png)
 
 ## Installation ##
 
