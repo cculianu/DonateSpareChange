@@ -7,12 +7,18 @@ A plugin for Electron Cash that allows you to donate spare 'change' unspent outp
 
 This is licensed under the MIT open source license.
 
+## Write The Developer 🧐 ##
+
+If you wish to contace me -- my email address is:
+
+  calin DOT culianu "at" gmail.com
+
 ## Support The Developer 😃 ##
 
 If you wish to encourage further development (or even just show your appreciation) please feel free to donate to:
 
   bitcoincash:qphax4s4n9h60jxj2fkrjs35w2tvgd4wzvf52cgtzc
-  
+    
 ![Screenshot](donate.png)
 
 ## Installation ##

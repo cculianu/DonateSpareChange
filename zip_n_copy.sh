@@ -11,7 +11,12 @@ if [ ! -d "$echome" ]; then
     exit 1
 fi
 
-if [ -e "$dest" ]; then
+force=""
+if [ "$1" == "-f" -o "$1" == "--force" ]; then
+	force="1"
+fi
+
+if [ -e "$dest" -a -z "$force" ]; then
     echo "$dest already exists, overwrite? [y/N] "
     read reply
     if [ "$reply" != "y" ]; then
@@ -21,6 +26,7 @@ if [ -e "$dest" ]; then
 fi
 
 dn=`dirname -- $0`
+
 
 pushd "$dn" > /dev/null 2>&1
 
