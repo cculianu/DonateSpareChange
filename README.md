@@ -1,10 +1,13 @@
-# Donate Spare Change - Electron Cash Plugin #
+# Donate Spare Change - Electron Cash Plugin 
 
-A plugin for Electron Cash that allows you to donate spare 'change' unspent outputs ('Coins' in Electron Cash parlance) automatically, after a certain age and below a certain amount, to charity.  This has the added benefit of preventing change outputs from being recombined with your addreses thus preserving your privacy.
+![Icon](resources/icon64.png)
+
+A plugin for Electron Cash that allows you to donate spare 'change' unspent outputs ('Coins' in Electron Cash parlance) automatically, after a certain age and below a certain amount, to charity.  This has the added benefit of preventing change outputs from being recombined with your addreses thus preserving your privacy.  
+
 
 This is licensed under the MIT open source license.
 
-## Donate ##
+## Support The Developer 😃 ##
 
 If you wish to encourage further development (or even just show your appreciation) please feel free to donate to:
 
