@@ -89,12 +89,16 @@ class Instance(QWidget, PrintError):
 
     sig_network_updated = pyqtSignal()
     sig_user_tabbed_to_us = pyqtSignal()
+    sig_user_tabbed_from_us = pyqtSignal()
+    sig_window_moved = pyqtSignal()
+    sig_window_resized = pyqtSignal()
 
     def __init__(self, plugin, wallet, window):
         super().__init__()
         self.plugin = plugin
         self.wallet = wallet
         self.window = window
+        self.window.installEventFilter(self)
         self.wallet_name = os.path.split(wallet.storage.path)[1]
         self.setObjectName(self.diagnostic_name())
         self.data = self.DataModel(self, self.wallet.storage, self.plugin.config)
@@ -156,8 +160,20 @@ class Instance(QWidget, PrintError):
                 self.sig_user_tabbed_to_us.emit()
             # if window unblocked, maybe user changed prefs. inform our managers to refresh() as maybe base_unit changed, etc.
             self.refresh_all()
+        elif event.type() in (QEvent.HideToParent,):
+            # user left our UI. Tell interested code about this (mainly the PopupLabel cares)
+            self.sig_user_tabbed_from_us.emit()
 
         return super().event(event) # Make real QWidget implementation actually handle the event
+
+    def eventFilter(self, window, event):
+        ''' Spies on events to parent window to figure out when the user moved or resized the window, and announces that fact via signals. '''
+        if window == self.window:
+            if event.type() == QEvent.Move:
+                self.sig_window_moved.emit()
+            elif event.type() == QEvent.Resize:
+                self.sig_window_resized.emit()
+        return super().eventFilter(window, event)
 
     def refresh_all(self):
         self.ch_mgr.refresh()
@@ -166,7 +182,7 @@ class Instance(QWidget, PrintError):
 
     def wallet_has_password(self):
         try:
-            return self.wallet.has_password() or not self.wallet.check_password(None)
+            return self.wallet.has_password() #or not self.wallet.check_password(None)
         except AttributeError: # happens on watching-only wallets which don't have the requiside methods
             return False
 
@@ -287,6 +303,7 @@ class Instance(QWidget, PrintError):
         ''' Manages the 'Criteria' groupbox and associated GUI controls and per-wallet data. '''
 
         criteria_changed_signal = pyqtSignal()
+        user_began_editing_signal = pyqtSignal()
 
         WARN_HIGH_AMOUNT = 200000 # in sats: 2 mBCH
 
@@ -296,6 +313,8 @@ class Instance(QWidget, PrintError):
             self.ui = ui
             self.data = data
             self.last_warned = time.time()-10.0
+            self.popup_label = None
+            self.popup_timer = None
 
             # Do some UI setup....
             # We couldn't put the BTCAmountEdit in the Qt .ui file because it's a custom python class, so we
@@ -313,9 +332,19 @@ class Instance(QWidget, PrintError):
             self.reload()
 
             # Connect signals/slots
+
+            # NB: Connect these first -- user_began_editing is fired unconditionally on edit. Will be user to indicate to user why we turned off autopay
+            self.ui.amount_edit.textChanged.connect(self.user_began_editing_signal)
+            self.ui.sb_age.valueChanged.connect(self.user_began_editing_signal)
+            self.user_began_editing_signal.connect(self.on_user_began_editing)
+
             self.ui.amount_edit.textChanged.connect(self.on_amount_changed)
             self.ui.sb_age.valueChanged.connect(self.on_age_changed)
             self.ui.chk_autodonate.clicked.connect(self.on_auto_checked)
+
+            self.parent.sig_user_tabbed_from_us.connect(self.cleanup_popup_label)
+            self.parent.sig_window_moved.connect(self.cleanup_popup_label)
+            self.parent.sig_window_resized.connect(self.cleanup_popup_label)
 
         def diagnostic_name(self): # from PrintError
             return self.__class__.__name__ + "@" + self.parent.diagnostic_name()
@@ -381,6 +410,42 @@ class Instance(QWidget, PrintError):
                                                        " for this wallet, then try again."),
                                                  title = _("Password-Free Wallet Required"),
                                                  parent = self.parent.window)
+            elif b:
+                self.cleanup_popup_label()
+
+        def on_user_began_editing(self):
+            self.print_error("User began editing, disabling auto-pay")
+            if self.ui.chk_autodonate.isChecked():
+                self.ui.chk_autodonate.setChecked(False)
+                from .popup_widget import PopupLabel
+
+                class MyPopupLabel(PopupLabel):
+                    def mousePressEvent(self, e):
+                        self.cmgr.cleanup_popup_label()
+                        return super().mousePressEvent(e)
+                if self.popup_label:
+                    self.cleanup_popup_label()
+                self.popup_label = MyPopupLabel('<font color="#ffffff"><p>{}</p></font>'.format(_("You began editing, so we turned off auto-pay."))
+                                                + '<font color="#ddffee"><p><b>{}</b></p></font>'.format(_("You may turn it back on when done.")),
+                                                self.ui.chk_autodonate)
+                self.popup_label.cmgr = self
+                self.popup_label.finalOpacity = 0.95
+                self.popup_label.resize(self.popup_label.width(), 120)
+                self.popup_label.setPointerPosition(PopupLabel.RightSide)
+                self.popup_label.showRelativeTo(self.ui.chk_autodonate)
+                self.popup_timer = do_later(self.ui.chk_autodonate, 10000.0, self.cleanup_popup_label)
+
+        def cleanup_popup_label(self):
+            if self.popup_label:
+                if self.popup_label.isVisible():
+                    self.popup_label.hide()
+                self.popup_label.deleteLater()
+                self.popup_label.cmgr = None
+                self.popup_label = None
+            if self.popup_timer:
+                self.popup_timer.stop()
+                self.popup_timer.deleteLater()
+                self.popup_timer = None
 
     class CoinsMgr(QObject, PrintError):
         ''' Manages the 'Coins' treewidget and associated GUI controls and per-wallet data. '''
@@ -657,6 +722,7 @@ class Instance(QWidget, PrintError):
         if self.wallet.network:
             self.wallet.network.unregister_callback(self.on_network_updated)
         if self.window:
+            self.window.removeEventFilter(self)
             ix = self.window.tabs.indexOf(self)
             if ix > -1:
                 self.window.tabs.removeTab(ix)
@@ -726,3 +792,16 @@ class RoundRobin(list):
             # and now put item at back. note this may end up growing the list by 1 if item was not in list.  but that's ok and is a feature.
             self.append(item)
         return self
+
+def do_later(parent, when_ms, fun, *args):
+    timer = QTimer(parent)
+    def timer_cb():
+        nonlocal timer
+        timer.stop()
+        timer.deleteLater()
+        timer = None
+        fun(*args)
+    timer.setSingleShot(True)
+    timer.timeout.connect(timer_cb)
+    timer.start(when_ms)
+    return timer
