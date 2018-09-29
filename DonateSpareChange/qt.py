@@ -686,8 +686,7 @@ def custom_question_box(msg, title="", buttons=[_("Cancel"), _("Ok")], parent = 
 class RoundRobin(list):
     ''' A list that is useful for a round-robin queue, allowing you to take items in the list and put them to the back.
         Note that .to_back() allows you to send arbitrary items in the list to the back, not just the first item.
-        .update() allows one to update the list whilst preserving the original order for items that remain in the list.
-    '''
+        .update() allows one to update the list whilst preserving the original order for items that remain in the list. '''
 
     def front(self):
         if len(self):
@@ -702,7 +701,7 @@ class RoundRobin(list):
 
     def update(self, l):
         ''' Update this list to include only items in the collection l, deleting items from self that aren't in l, whilst preserving
-            the original order of self. As a final pass it inserts to front all items in l that weren't originally in self.'''
+            the original order of self. As a final pass it inserts to front all items in l that weren't originally in self. '''
         tmp = self.copy()
         self.clear()
         for t in tmp:
