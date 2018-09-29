@@ -92,6 +92,7 @@ class Instance(QWidget, PrintError):
     sig_user_tabbed_from_us = pyqtSignal()
     sig_window_moved = pyqtSignal()
     sig_window_resized = pyqtSignal()
+    sig_window_activation_changed = pyqtSignal()
 
     def __init__(self, plugin, wallet, window):
         super().__init__()
@@ -168,11 +169,14 @@ class Instance(QWidget, PrintError):
 
     def eventFilter(self, window, event):
         ''' Spies on events to parent window to figure out when the user moved or resized the window, and announces that fact via signals. '''
+        #self.print_error("eventFilter got event", event.type())
         if window == self.window:
             if event.type() == QEvent.Move:
                 self.sig_window_moved.emit()
             elif event.type() == QEvent.Resize:
                 self.sig_window_resized.emit()
+            elif event.type() == QEvent.ActivationChange:
+                self.sig_window_activation_changed.emit()
         return super().eventFilter(window, event)
 
     def refresh_all(self):
@@ -182,7 +186,7 @@ class Instance(QWidget, PrintError):
 
     def wallet_has_password(self):
         try:
-            return self.wallet.has_password() #or not self.wallet.check_password(None)
+            return self.wallet.has_password()
         except AttributeError: # happens on watching-only wallets which don't have the requiside methods
             return False
 
@@ -345,6 +349,7 @@ class Instance(QWidget, PrintError):
             self.parent.sig_user_tabbed_from_us.connect(self.cleanup_popup_label)
             self.parent.sig_window_moved.connect(self.cleanup_popup_label)
             self.parent.sig_window_resized.connect(self.cleanup_popup_label)
+            self.parent.sig_window_activation_changed.connect(self.cleanup_popup_label)
 
         def diagnostic_name(self): # from PrintError
             return self.__class__.__name__ + "@" + self.parent.diagnostic_name()
@@ -403,20 +408,31 @@ class Instance(QWidget, PrintError):
             self.criteria_changed_signal.emit()
 
         def on_auto_checked(self, b):
-            if self.parent.wallet_has_password():
-                self.ui.chk_autodonate.setChecked(False)
-                self.parent.window.show_warning(msg=_("Auto-donation requires that you disable all password protection on this wallet.\n\n" +
-                                                       "If you wish to proceed, use the pasword 'lock' tool button to clear the password\n" +
-                                                       " for this wallet, then try again."),
-                                                 title = _("Password-Free Wallet Required"),
-                                                 parent = self.parent.window)
-            elif b:
+            if b:
                 self.cleanup_popup_label()
+                if self.parent.wallet_has_password():
+                    self.parent.window.show_warning(msg=_("Auto-donation requires that you disable all password protection on this wallet.\n\n" +
+                                                           "If you wish to proceed, use the pasword 'lock' tool button to clear the password\n" +
+                                                           " for this wallet, then try again."),
+                                                     title = _("Password-Free Wallet Required"),
+                                                     parent = self.parent.window)
+                    b = False
+                else:
+                    cd = self.data.get_changedef()
+                    if not self.parent.window.question(title = _("Confirm Auto-Donation"),
+                                                       parent = self.parent.window,
+                                                       msg = (_("Before auto-donation is enabled, please confirm:") + "\n\n" +
+                                                              _("Automatically donate coins valued less than: {}.").format(self.parent.window.format_amount_and_units(cd[0])) + "\n\n" +
+                                                              _("With age of at least: {} confirmed blocks.").format(cd[1]) + "\n\n" +
+                                                              _("Do you wish to proceed?") ) ):
+                        b = False
+            self.ui.chk_autodonate.setChecked(b)
+            self.data.set_autodonate(b)
 
         def on_user_began_editing(self):
             self.print_error("User began editing, disabling auto-pay")
             if self.ui.chk_autodonate.isChecked():
-                self.ui.chk_autodonate.setChecked(False)
+                self.on_auto_checked(False) # forces checkbox off
                 from .popup_widget import PopupLabel
 
                 class MyPopupLabel(PopupLabel):
@@ -425,7 +441,7 @@ class Instance(QWidget, PrintError):
                         return super().mousePressEvent(e)
                 if self.popup_label:
                     self.cleanup_popup_label()
-                self.popup_label = MyPopupLabel('<font color="#ffffff"><p>{}</p></font>'.format(_("You began editing, so we turned off auto-pay."))
+                self.popup_label = MyPopupLabel('<font color="#ffffff"><p>{}</p></font>'.format(_("You began editing, so we turned off auto-donation."))
                                                 + '<font color="#ddffee"><p><b>{}</b></p></font>'.format(_("You may turn it back on when done.")),
                                                 self.ui.chk_autodonate)
                 self.popup_label.cmgr = self
@@ -546,7 +562,7 @@ class Instance(QWidget, PrintError):
                     item.setSelected(True)
 
             if not len(coins):
-                self.ui.lbl_utxos.setText(_("This wallet is empty and has no coins"))
+                self.ui.lbl_utxos.setText(_("This wallet is currently empty and has no coins"))
             else:
                 self.ui.lbl_utxos.setText(_("{}/{} coins meet the specified criteria").format(okcoins, len(coins)))
             self.ui.bt_donate_all.setEnabled(okcoins)
