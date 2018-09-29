@@ -170,19 +170,9 @@ class Instance(QWidget, PrintError):
         except AttributeError: # happens on watching-only wallets which don't have the requiside methods
             return False
 
-    class Engine(QObject, PrintError):
-        ''' The donation engine.  Encapsulates all logic of picking coins to donate, prompting user, setting up Send tab, etc '''
-        def __init__(self, parent, data):
-            super().__init__(parent) # QObject c'tor
-            self.parent = parent # class 'Instance' instance
-            self.data = data
-
-        def diagnostic_name(self): # from PrintError
-            return self.__class__.__name__ + "@" + self.parent.diagnostic_name()
-
     class CharitiesMgr(QObject, PrintError):
         ''' Manages the 'Charities' treewidget and associated GUI controls and per-wallet data. '''
-        
+
         def __init__(self, parent, ui, data):
             super().__init__(parent)
             self.parent = parent
@@ -298,7 +288,7 @@ class Instance(QWidget, PrintError):
         ''' Manages the 'Criteria' groupbox and associated GUI controls and per-wallet data. '''
 
         criteria_changed_signal = pyqtSignal()
-        
+
         WARN_HIGH_AMOUNT = 200000 # in sats: 2 mBCH
 
         def __init__(self, parent, ui, data):
@@ -375,7 +365,7 @@ class Instance(QWidget, PrintError):
                         # Note: the above check won't be invoked again immediately though, because the last_warned timeout won't have expired.
                         self.ui.amount_edit.setAmount(sats)
                         return
-                        
+
                 self.data.set_changedef((sats, *cd[1:]), save=True)
                 self.criteria_changed_signal.emit()
 
@@ -431,7 +421,7 @@ class Instance(QWidget, PrintError):
 
         def get_coins(self, eligible_only = False, from_treewidget = False, selected_only = False):
             ''' Returns a list of coins, either from the cached items in the treewidget or from the wallet. '''
-            
+
             if from_treewidget:
                 if selected_only:
                     items = self.ui.tree_coins.selectedItems()
@@ -501,11 +491,11 @@ class Instance(QWidget, PrintError):
             def restoreScrollBar():
                 nonlocal timer
                 timer.deleteLater() # otherwise dead timer lives on.
-                timer = None 
+                timer = None
                 if self.ui and self.ui.tree_coins:
                     self.ui.tree_coins.updateGeometry()
                     self.ui.tree_coins.verticalScrollBar().setValue(scroll_pos_val) # restore scroll bar to previous
-            
+
             timer.setSingleShot(True)
             timer.timeout.connect(restoreScrollBar)
             timer.start(1)  # need to do this from a timer some time later due to Qt quirks
@@ -571,7 +561,7 @@ class Instance(QWidget, PrintError):
     # nested class.. handles writing our data dict to/from persisten store
     class DataModel:
         ''' Interface to the permanent store for this plugin's persistent data & settings (basically, Wallet Storage) '''
-        
+
         def __init__(self, parent, storage, config):
             self.parent = parent
             self.storage = storage
@@ -638,13 +628,22 @@ class Instance(QWidget, PrintError):
                 self.put_data(d, save=save)
             except ValueError:
                 pass
-            
+
         def get_global_warn_high_thresh(self):
             return self.config.get(self.parent.plugin.name + '__WarnHighAmountThresh', True)
 
         def set_global_warn_high_thresh(self, b):
             self.config.set_key(self.parent.plugin.name + '__WarnHighAmountThresh', bool(b))
 
+    class Engine(QObject, PrintError):
+        ''' The donation engine.  Encapsulates all logic of picking coins to donate, prompting user, setting up Send tab, etc '''
+        def __init__(self, parent, data):
+            super().__init__(parent) # QObject c'tor
+            self.parent = parent # class 'Instance' instance
+            self.data = data
+
+        def diagnostic_name(self): # from PrintError
+            return self.__class__.__name__ + "@" + self.parent.diagnostic_name()
 
     # Uncomment to test object lifetime and make sure Qt is deleting us.
     #def __del__(self):
@@ -667,6 +666,7 @@ class Instance(QWidget, PrintError):
     def diagnostic_name(self):
         return self.plugin.name + "@" + str(self.wallet_name)
 
+
 def custom_question_box(msg, title="", buttons=[_("Cancel"), _("Ok")], parent = None):
     mb = QMessageBox(QMessageBox.Question, title, msg, QMessageBox.NoButton, parent)
     if not buttons: buttons = [_("Ok")] # make sure we have at least 1 button!
@@ -679,3 +679,28 @@ def custom_question_box(msg, title="", buttons=[_("Cancel"), _("Ok")], parent = 
     mb.exec()
     clicked = mb.clickedButton()
     return clicked.text()
+
+
+class RoundRobin(list):
+    ''' A list that is useful for a round-robin queue, allowing you to take items in the list and put them to the back. Note that
+        to_back() allows you to send arbitrary items in the list to the back, not just the first item. '''
+
+    def front(self):
+        if len(self):
+            return self[0]
+        return None
+
+    def to_back(self, item = None):
+        if item is None:
+            # this call path basically says to unconditionally take whatever was at the front and put it to the back.
+            item = self[0] # IndexError possible here if caller misuing class
+            self.pop(0)
+            self.append(item)
+        else:
+            for i, elem in enumerate(self):
+                # look for item in list.. if found, take it out
+                if elem == item:
+                    self.pop(i)
+                    break
+            # and now put item at back. note this may end up growing the list by 1 if item was not in list.  but that's ok and is a feature.
+            self.append(item)
