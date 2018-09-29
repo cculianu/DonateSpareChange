@@ -9,6 +9,7 @@ from electroncash.i18n import _
 from electroncash.plugins import BasePlugin, hook
 from electroncash.util import PrintError
 from electroncash_gui.qt.amountedit import BTCAmountEdit
+from collections import OrderedDict
 
 
 class Plugin(BasePlugin):
@@ -96,7 +97,7 @@ class Instance(QWidget, PrintError):
         self.window = window
         self.wallet_name = os.path.split(wallet.storage.path)[1]
         self.setObjectName(self.diagnostic_name())
-        self.data = self.DataModel(self, self.wallet.storage)
+        self.data = self.DataModel(self, self.wallet.storage, self.plugin.config)
         self.already_warned_watching = False
         self.disabled = False
 
@@ -297,12 +298,15 @@ class Instance(QWidget, PrintError):
         ''' Manages the 'Criteria' groupbox and associated GUI controls and per-wallet data. '''
 
         criteria_changed_signal = pyqtSignal()
+        
+        WARN_HIGH_AMOUNT = 200000 # in sats: 2 mBCH
 
         def __init__(self, parent, ui, data):
             super().__init__(parent)
             self.parent = parent # Instance
             self.ui = ui
             self.data = data
+            self.last_warned = time.time()-10.0
 
             # Do some UI setup....
             # We couldn't put the BTCAmountEdit in the Qt .ui file because it's a custom python class, so we
@@ -344,7 +348,34 @@ class Instance(QWidget, PrintError):
         def on_amount_changed(self):
             sats = self.ui.amount_edit.get_amount()
             if sats is not None:
+                #self.print_error("sats",sats)
                 cd = self.data.get_changedef()
+                if sats >= self.WARN_HIGH_AMOUNT and self.data.get_global_warn_high_thresh() and time.time()-self.last_warned > 10.0:
+                    # Custom logic to warn the user if they specify an amount above self.WARN_HIGH_AMOUNT
+                    self.ui.amount_edit.blockSignals(True)
+                    reply = custom_question_box(msg = (_("You specified a spare change threshold that is rather high (above {}).").format(self.parent.window.format_amount_and_units(self.WARN_HIGH_AMOUNT))
+                                                       + "\n\n" +
+                                                       _("Are you sure you wish to proceed?")),
+                                                title = _("Are you sure?"),
+                                                parent = self.parent.window,
+                                                buttons = OrderedDict([ (_("Yes && Never ask again!") , QMessageBox.YesRole),
+                                                                        (_("No") , QMessageBox.NoRole),
+                                                                        (_("Yes") , QMessageBox.YesRole), ]))
+                    self.ui.amount_edit.blockSignals(False)
+                    self.last_warned = time.time()
+                    #self.print_error("reply",reply)
+                    if reply == _("No"):
+                        self.ui.amount_edit.setAmount(cd[0]) # revert back
+                        return # and abort
+                    else:
+                        if reply != _("Yes"):
+                            # they wish to proceed.. and never be asked again!
+                            self.data.set_global_warn_high_thresh(False)
+                        # the below ends up calling us again with the same value. We do this to make sure the GUI and us are in synch (can get out of synch due to blocked signals above)
+                        # Note: the above check won't be invoked again immediately though, because the last_warned timeout won't have expired.
+                        self.ui.amount_edit.setAmount(sats)
+                        return
+                        
                 self.data.set_changedef((sats, *cd[1:]), save=True)
                 self.criteria_changed_signal.emit()
 
@@ -469,7 +500,8 @@ class Instance(QWidget, PrintError):
             timer = QTimer(self) # attach a timer object to us. Timer will be auto-killed either by python GC or if we die before it fires because we are its parent
             def restoreScrollBar():
                 nonlocal timer
-                timer = None # allow Python GC to clean up timer object attached to us
+                timer.deleteLater() # otherwise dead timer lives on.
+                timer = None 
                 if self.ui and self.ui.tree_coins:
                     self.ui.tree_coins.updateGeometry()
                     self.ui.tree_coins.verticalScrollBar().setValue(scroll_pos_val) # restore scroll bar to previous
@@ -519,7 +551,11 @@ class Instance(QWidget, PrintError):
             for item in items:
                 if item.data(0, Qt.UserRole) in names:
                     item.setSelected(True)
-            self.parent.window.tabs.setCurrentWidget(self.parent.window.utxo_tab)
+            tab = self.parent.window.utxo_tab
+            visible = self.parent.window.config.get('show_{}_tab'.format(tab.tab_name), False)
+            if not visible:
+                self.parent.window.toggle_tab(tab)
+            self.parent.window.tabs.setCurrentWidget(tab)
 
         def on_donate_selected(self):
             coins, okcount = self.get_coins(from_treewidget = True, eligible_only = True, selected_only = True)
@@ -536,9 +572,10 @@ class Instance(QWidget, PrintError):
     class DataModel:
         ''' Interface to the permanent store for this plugin's persistent data & settings (basically, Wallet Storage) '''
         
-        def __init__(self, parent, storage):
+        def __init__(self, parent, storage, config):
             self.parent = parent
             self.storage = storage
+            self.config = config
             self.keys = {
                 'root' : self.parent.plugin.name + "__Data__v00", # the root-level key that goes into wallet storage for all of our plugin data
                 'charities' : 'charities', # the addresses, which ends up being a list of tuples (enabled, name, address_str)
@@ -601,7 +638,12 @@ class Instance(QWidget, PrintError):
                 self.put_data(d, save=save)
             except ValueError:
                 pass
+            
+        def get_global_warn_high_thresh(self):
+            return self.config.get(self.parent.plugin.name + '__WarnHighAmountThresh', True)
 
+        def set_global_warn_high_thresh(self, b):
+            self.config.set_key(self.parent.plugin.name + '__WarnHighAmountThresh', bool(b))
 
 
     # Uncomment to test object lifetime and make sure Qt is deleting us.
@@ -618,8 +660,22 @@ class Instance(QWidget, PrintError):
             if ix > -1:
                 self.window.tabs.removeTab(ix)
                 self.deleteLater() # since qt doesn't delete us, we need to explicitly delete ourselves, otherwise the QWidget lives around forever in memory
-        self.window, self.plugin, self.wallet, self.wallet_name = (None,) * 4
+        self.disabled = True
+        self.window, self.plugin, self.wallet, self.wallet_name, self.data, self.ch_mgr, self.co_mgr, self.cr_mgr, self.engine = (None,) * 9 # trigger object cleanup sooner rather than later!
 
     #overrides PrintError super
     def diagnostic_name(self):
         return self.plugin.name + "@" + str(self.wallet_name)
+
+def custom_question_box(msg, title="", buttons=[_("Cancel"), _("Ok")], parent = None):
+    mb = QMessageBox(QMessageBox.Question, title, msg, QMessageBox.NoButton, parent)
+    if not buttons: buttons = [_("Ok")] # make sure we have at least 1 button!
+    if isinstance(buttons, dict):
+        for but,role in buttons.items():
+            mb.addButton(but, role)
+    else:
+        for i,but in enumerate(buttons):
+            mb.addButton(but, QMessageBox.AcceptRole if i > 0 else QMessageBox.RejectRole)
+    mb.exec()
+    clicked = mb.clickedButton()
+    return clicked.text()

@@ -72,6 +72,9 @@
           <pointsize>11</pointsize>
          </font>
         </property>
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;The set of all coins (UTXOs) in your wallet are displayed here.&lt;/p&gt;&lt;p&gt;Coins that meet the criteria for donation that you specified are marked as &lt;span style=&quot; font-weight:600;&quot;&gt;eligible&lt;/span&gt;.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
         <property name="midLineWidth">
          <number>0</number>
         </property>
@@ -157,6 +160,9 @@
       </item>
       <item row="2" column="1">
        <widget class="QPushButton" name="bt_donate_selected">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Create new transactions, 1 tx per donation, for all the coins you selected that are &lt;span style=&quot; font-weight:600;&quot;&gt;eligible&lt;/span&gt;.&lt;/p&gt;&lt;p&gt;Recipients will be selected in a round-robin fashion from the set of all recipients.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
         <property name="text">
          <string>Donate Selected</string>
         </property>
@@ -177,6 +183,9 @@
       </item>
       <item row="2" column="3">
        <widget class="QPushButton" name="bt_donate_all">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Create new transactions, 1 tx per donation, for all the coins in your wallet that are &lt;span style=&quot; font-weight:600;&quot;&gt;eligible&lt;/span&gt;.&lt;/p&gt;&lt;p&gt;Recipients will be selected in a round-robin fashion from the set of all recipients.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
         <property name="text">
          <string>Donate All Eligible</string>
         </property>
@@ -200,6 +209,9 @@
    </item>
    <item row="2" column="0" rowspan="2">
     <widget class="QGroupBox" name="gb_charities">
+     <property name="toolTip">
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Specify a list of recipients to receive your spare change.&lt;/p&gt;&lt;p&gt;Donations will be made in a round-robin fashion from the set of enabled recipients with a valid address specified.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
      <property name="title">
       <string>Charities / Donation Destinations</string>
      </property>
@@ -319,7 +331,7 @@
          <bool>false</bool>
         </property>
         <property name="toolTip">
-         <string>Delete selected charities</string>
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Delete selected recipients&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
         <property name="text">
          <string>➖</string>
@@ -335,7 +347,7 @@
       <item row="1" column="3">
        <widget class="QToolButton" name="tb_plus">
         <property name="toolTip">
-         <string>Add a new charity</string>
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Add a new recipient&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
         <property name="text">
          <string>➕</string>
@@ -504,6 +516,9 @@
       </property>
       <item row="0" column="0">
        <widget class="QLabel" name="lbl_amount">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;In order to accommodate a wide variety of wallet configurations, this plugin donates from both &amp;quot;change&amp;quot; addresses as well as &amp;quot;receiving&amp;quot; addresses. As such, it needs to decide what is &lt;span style=&quot; font-weight:600;&quot;&gt;spare change&lt;/span&gt; and what is not.&lt;/p&gt;&lt;p&gt;So here is where you specify what amount for a coin (UTXO) you consider to be &lt;span style=&quot; font-weight:600;&quot;&gt;spare change. &lt;/span&gt;&lt;/p&gt;&lt;p&gt;If a coin is below this threshold, it's considered spare change and is &lt;span style=&quot; font-weight:600;&quot;&gt;eligible&lt;/span&gt; for donation to one of the charities specified.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-style:italic;&quot;&gt;Do not specify significant amounts here unless you are rich!&lt;/span&gt;&lt;/p&gt;&lt;p&gt;(0.001 BCH aka 1 mBCH is a good threshold if you aren't sure)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
         <property name="text">
          <string>&quot;Change&quot; amount theshold below:</string>
         </property>
@@ -526,6 +541,9 @@
           <height>30</height>
          </size>
         </property>
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;In order to accommodate a wide variety of wallet configurations, this plugin donates from both &amp;quot;change&amp;quot; addresses as well as &amp;quot;receiving&amp;quot; addresses. As such, it needs to decide what is &lt;span style=&quot; font-weight:600;&quot;&gt;spare change&lt;/span&gt; and what is not.&lt;/p&gt;&lt;p&gt;So here is where you specify what amount for a coin (UTXO) you consider to be &lt;span style=&quot; font-weight:600;&quot;&gt;spare change. &lt;/span&gt;&lt;/p&gt;&lt;p&gt;If a coin is below this threshold, it's considered spare change and is &lt;span style=&quot; font-weight:600;&quot;&gt;eligible&lt;/span&gt; for donation to one of the charities specified.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-style:italic;&quot;&gt;Do not specify significant amounts here unless you are rich!&lt;/span&gt;&lt;/p&gt;&lt;p&gt;(0.001 BCH aka 1 mBCH is a good threshold if you aren't sure)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
         <property name="frameShape">
          <enum>QFrame::StyledPanel</enum>
         </property>
@@ -536,6 +554,9 @@
       </item>
       <item row="1" column="0">
        <widget class="QLabel" name="lbl_age">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Specify how many confirmations a coin needs to have before it is sent to a charity.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;0 blocks&lt;/span&gt; indicates unconfirmed outputs are ok to be spent&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;1 block&lt;/span&gt; indicates at least 1 confirmation is required before you donate the coin&lt;/p&gt;&lt;p&gt;(and so on)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
         <property name="text">
          <string>Donation minimum coin age:</string>
         </property>
@@ -546,6 +567,9 @@
       </item>
       <item row="1" column="1">
        <widget class="QSpinBox" name="sb_age">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Specify how many confirmations a coin needs to have before it is sent to a charity.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;0 blocks&lt;/span&gt; indicates unconfirmed outputs are ok to be spent&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;1 block&lt;/span&gt; indicates at least 1 confirmation is required before you donate the coin&lt;/p&gt;&lt;p&gt;(and so on)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
         <property name="suffix">
          <string> blocks</string>
         </property>
@@ -620,6 +644,9 @@
       </item>
       <item row="3" column="0" colspan="2">
        <widget class="QCheckBox" name="chk_autodonate">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Auto-donate coins &lt;span style=&quot; font-weight:600;&quot;&gt;in the background&lt;/span&gt; (without prompting) as they become eligible. &lt;/p&gt;&lt;p&gt;This feature requires that your wallet not be password-protected.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
         <property name="text">
          <string>Auto-donate change  without prompting</string>
         </property>
