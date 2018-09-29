@@ -690,6 +690,11 @@ class RoundRobin(list):
             return self[0]
         return None
 
+    def push_front_unique(self, item):
+        ''' Only inserts item if it doesn't already exist in the list and is not None. '''
+        if item is not None and item not in self:
+            self.insert(0, item)
+
     def to_back(self, item = None):
         if item is None:
             # this call path basically says to unconditionally take whatever was at the front and put it to the back.
