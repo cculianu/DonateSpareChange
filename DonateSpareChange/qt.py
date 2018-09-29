@@ -735,20 +735,6 @@ class Instance(QWidget, PrintError):
         return self.plugin.name + "@" + str(self.wallet_name)
 
 
-def custom_question_box(msg, title="", buttons=[_("Cancel"), _("Ok")], parent = None):
-    mb = QMessageBox(QMessageBox.Question, title, msg, QMessageBox.NoButton, parent)
-    if not buttons: buttons = [_("Ok")] # make sure we have at least 1 button!
-    if isinstance(buttons, dict):
-        for but,role in buttons.items():
-            mb.addButton(but, role)
-    else:
-        for i,but in enumerate(buttons):
-            mb.addButton(but, QMessageBox.AcceptRole if i > 0 else QMessageBox.RejectRole)
-    mb.exec()
-    clicked = mb.clickedButton()
-    return clicked.text()
-
-
 class RoundRobin(list):
     ''' A list that is useful for a round-robin queue, allowing you to take items in the list and put them to the back.
         Note that .to_back() allows you to send arbitrary items in the list to the back, not just the first item.
@@ -792,6 +778,20 @@ class RoundRobin(list):
             # and now put item at back. note this may end up growing the list by 1 if item was not in list.  but that's ok and is a feature.
             self.append(item)
         return self
+
+
+def custom_question_box(msg, title="", buttons=[_("Cancel"), _("Ok")], parent = None):
+    mb = QMessageBox(QMessageBox.Question, title, msg, QMessageBox.NoButton, parent)
+    if not buttons: buttons = [_("Ok")] # make sure we have at least 1 button!
+    if isinstance(buttons, dict):
+        for but,role in buttons.items():
+            mb.addButton(but, role)
+    else:
+        for i,but in enumerate(buttons):
+            mb.addButton(but, QMessageBox.AcceptRole if i > 0 else QMessageBox.RejectRole)
+    mb.exec()
+    clicked = mb.clickedButton()
+    return clicked.text()
 
 def do_later(parent, when_ms, fun, *args):
     timer = QTimer(parent)
