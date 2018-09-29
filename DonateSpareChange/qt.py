@@ -236,7 +236,6 @@ class Instance(QWidget, PrintError):
                         item_changed.setSelected(False) # force it unselected so they see the error of their ways!
             self.ui.lbl_bad_address.setHidden(allValid)
 
-
         def on_selection_changed(self):
             self.ui.tb_minus.setEnabled(len(self.ui.tree_charities.selectedItems()))
 
@@ -597,9 +596,12 @@ class Instance(QWidget, PrintError):
         def save(self):
             self.storage.write()
 
-        def get_charities(self):
+        def get_charities(self, valid_enabled_only = False):
             d = self.get_data()
-            return d.get('charities', list())
+            ret = d.get('charities', list())
+            if valid_enabled_only:
+                ret = [r for r in ret if r[0] and Address.is_valid(r[2])]
+            return ret
 
         def set_charities(self, charities, save=False):
             if isinstance(charities, list):
@@ -682,8 +684,10 @@ def custom_question_box(msg, title="", buttons=[_("Cancel"), _("Ok")], parent = 
 
 
 class RoundRobin(list):
-    ''' A list that is useful for a round-robin queue, allowing you to take items in the list and put them to the back. Note that
-        to_back() allows you to send arbitrary items in the list to the back, not just the first item. '''
+    ''' A list that is useful for a round-robin queue, allowing you to take items in the list and put them to the back.
+        Note that .to_back() allows you to send arbitrary items in the list to the back, not just the first item.
+        .update() allows one to update the list whilst preserving the original order for items that remain in the list.
+    '''
 
     def front(self):
         if len(self):
@@ -694,6 +698,19 @@ class RoundRobin(list):
         ''' Only inserts item if it doesn't already exist in the list and is not None. '''
         if item is not None and item not in self:
             self.insert(0, item)
+        return self
+
+    def update(self, l):
+        ''' Update this list to include only items in the collection l, deleting items from self that aren't in l, whilst preserving
+            the original order of self. As a final pass it inserts to front all items in l that weren't originally in self.'''
+        tmp = self.copy()
+        self.clear()
+        for t in tmp:
+            if t in l:
+                self.append(t)
+        for item in l:
+            self.push_front_unique(item)
+        return self
 
     def to_back(self, item = None):
         if item is None:
@@ -709,3 +726,4 @@ class RoundRobin(list):
                     break
             # and now put item at back. note this may end up growing the list by 1 if item was not in list.  but that's ok and is a feature.
             self.append(item)
+        return self
