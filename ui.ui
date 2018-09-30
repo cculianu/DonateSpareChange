@@ -252,7 +252,7 @@
          <bool>false</bool>
         </property>
         <property name="columnCount">
-         <number>3</number>
+         <number>4</number>
         </property>
         <attribute name="headerVisible">
          <bool>true</bool>
@@ -273,6 +273,11 @@
         </column>
         <column>
          <property name="text">
+          <string>Donated (mBCH)</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
           <string>Recipient Name</string>
          </property>
         </column>
@@ -284,6 +289,9 @@
         <item>
          <property name="text">
           <string/>
+         </property>
+         <property name="text">
+          <string>1.2345678</string>
          </property>
          <property name="text">
           <string>EatBCH</string>

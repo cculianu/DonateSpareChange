@@ -9,7 +9,7 @@ from electroncash.i18n import _
 from electroncash.plugins import BasePlugin, hook
 from electroncash.util import PrintError
 from electroncash_gui.qt.amountedit import BTCAmountEdit
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 
 
 class Plugin(BasePlugin):
@@ -115,7 +115,7 @@ class Instance(QWidget, PrintError):
         self.ch_mgr = self.CharitiesMgr(self, self.ui, self.data)
         self.cr_mgr = self.CriteriaMgr(self, self.ui, self.data)
         self.co_mgr = self.CoinsMgr(self, self.ui, self.data)
-        self.engine = self.Engine(self, self.wallet, self.data)
+        self.engine = self.Engine(self, self.wallet, self.window, self.co_mgr, self.data)
 
         # connect any signals/slots
         self.cr_mgr.criteria_changed_signal.connect(self.co_mgr.refresh)
@@ -189,7 +189,7 @@ class Instance(QWidget, PrintError):
             return self.wallet.has_password()
         except AttributeError: # happens on watching-only wallets which don't have the requiside methods
             return False
- 
+
     class CharitiesMgr(QObject, PrintError):
         ''' Manages the 'Charities' treewidget and associated GUI controls and per-wallet data. '''
 
@@ -218,12 +218,20 @@ class Instance(QWidget, PrintError):
 
         def append_item(self, char_entry):
             en, name, address = char_entry
-            item = QTreeWidgetItem(self.ui.tree_charities, ["", name, address])
+            total = self.parent.window.format_amount(self.data.history_get_total_for_address(address), whitespaces=True)
+            #import random # for testing layout
+            #total = self.parent.window.format_amount(random.randint(1000,10000000), whitespaces=True)
+            item = QTreeWidgetItem(self.ui.tree_charities, ["", total, name, address])
+            pointSize = 12
+            #if len(total.strip()) > 12:
+            #    pointSize = 11
+            item.setFont(1, QFont("Fixed", pointSize))
             item.setFlags(item.flags() | Qt.ItemIsEditable)
             chk = QCheckBox()
             self.ui.tree_charities.setItemWidget(item, 0, chk)
             i = self.ui.tree_charities.topLevelItemCount()-1
             item.setData(0, Qt.UserRole, i)
+            item.setData(1, Qt.UserRole, total) # remember original text in case user "edits" it.
             if en:
                 chk.setChecked(True)
             def on_chkd(b,chk=chk,name=name):
@@ -233,6 +241,10 @@ class Instance(QWidget, PrintError):
 
         def reload(self):
             self.ui.tree_charities.clear()
+            hitem = self.ui.tree_charities.headerItem()
+            hitem.setText(1, _("Donated ({})").format(self.parent.window.base_unit())) # label the header with the correct amount
+            hitem.setTextAlignment(0, Qt.AlignCenter)
+            hitem.setTextAlignment(1, Qt.AlignJustify)
             chars = self.data.get_charities()
 
             for char in chars:
@@ -245,12 +257,12 @@ class Instance(QWidget, PrintError):
             allValid = True
             badBrush, goodBrush = QBrush(QColor("#BC1E1E")), QBrush()
             for i,item in enumerate(items):
-                name, address = (item.text(1), item.text(2))
+                name, address = (item.text(2), item.text(3))
                 #self.print_error("item ", i, "name=", name, "address=", address)
                 if Address.is_valid(address):
-                    item.setForeground(2, goodBrush)
+                    item.setForeground(3, goodBrush)
                 else:
-                    item.setForeground(2, badBrush)
+                    item.setForeground(3, badBrush)
                     allValid = False
                     if item == item_changed:
                         item_changed.setSelected(False) # force it unselected so they see the error of their ways!
@@ -260,6 +272,8 @@ class Instance(QWidget, PrintError):
             self.ui.tb_minus.setEnabled(len(self.ui.tree_charities.selectedItems()))
 
         def on_item_changed(self, item, column):
+            if column == 0: return
+            if column == 1: item.setText(1, item.data(1, Qt.UserRole)); return # suppress editing of amounts column and just restore its previous value
             self.check_ok(item)
             self.save()
 
@@ -283,7 +297,7 @@ class Instance(QWidget, PrintError):
             charities = []
             for item in items:
                 chk = self.ui.tree_charities.itemWidget(item, 0)
-                name, address = item.text(1), item.text(2)
+                name, address = item.text(2), item.text(3)
                 #self.print_error("saving ", name, address)
                 enabled = False
                 if chk: enabled = bool(chk.isChecked()) # sometimes the checkbox is missing when the user just added a new item, and we get the signal too quickly
@@ -427,7 +441,7 @@ class Instance(QWidget, PrintError):
                                                               _("Do you wish to proceed?") ) ):
                         b = False
             self.ui.chk_autodonate.setChecked(b)
-            self.data.set_autodonate(b)
+            self.data.set_autodonate(b, save = True)
 
         def on_user_began_editing(self):
             self.print_error("User began editing, disabling auto-pay")
@@ -471,6 +485,7 @@ class Instance(QWidget, PrintError):
             self.parent = parent # Instance
             self.ui = ui
             self.data = data
+            self.active = False # we won't refresh on "updated" signals until this is true (when user tabs to us)
 
             self.ui.tree_coins.setColumnWidth(0, 120)
             self.ui.tree_coins.setColumnWidth(1, 120)
@@ -480,7 +495,9 @@ class Instance(QWidget, PrintError):
 
             self.reload()
 
-            self.parent.sig_network_updated.connect(self.refresh) # when tx's come in or blocks come in, we need to refresh utxo list.
+            self.parent.sig_user_tabbed_from_us.connect(lambda: self.on_activate_status_change(False))
+            self.parent.sig_user_tabbed_to_us.connect(lambda: self.on_activate_status_change(True))
+            self.parent.sig_network_updated.connect(self.on_network_updated) # when tx's come in or blocks come in, we need to refresh utxo list.
             self.ui.tree_coins.itemSelectionChanged.connect(self.on_selection_changed) # coins selection changed
             self.ui.bt_donate_selected.clicked.connect(self.on_donate_selected)
             self.ui.bt_donate_all.clicked.connect(self.on_donate_all)
@@ -490,6 +507,16 @@ class Instance(QWidget, PrintError):
 
         def diagnostic_name(self): # from PrintError
             return self.__class__.__name__ + "@" + self.parent.diagnostic_name()
+
+        def on_network_updated(self):
+            if self.active: self.refresh()
+
+        def on_activate_status_change(self, b):
+            ''' The active status flag gets set by intercepting when we become the active tab. When we are inactive we suppress auto-refresh
+            of the coins tab on network 'updated' signals as a performance boost.  This is ok to do because when the user tabs to us,
+            parent Instance class forces a full UI refresh anyway. '''
+            self.active = b
+            #self.print_error("Active status set to:","ACTIVE" if b else "INACTIVE")
 
         def on_close(self):
             if self.parent.wallet.network:
@@ -642,6 +669,8 @@ class Instance(QWidget, PrintError):
     class DataModel:
         ''' Interface to the permanent store for this plugin's persistent data & settings (basically, Wallet Storage) '''
 
+        HistoryEntry = namedtuple('HistoryEntry', 'address name amount ref txout') # address=str, name=str, amount=int, ref=str, txout=str
+
         def __init__(self, parent, storage, config):
             self.parent = parent
             self.storage = storage
@@ -651,6 +680,9 @@ class Instance(QWidget, PrintError):
                 'charities' : 'charities', # the addresses, which ends up being a list of tuples (enabled, name, address_str)
                 'change_def' : 'change_def', # the definition of what constitutes change, which is a simple tuple
                 'autodonate' : 'autodonate', # if true, automatically donate change without prompting. requires unenecrypted wallet
+                'roundrobin' : 'roundrobin', # list of active charities in round-robin fashion. leftmost entry is the next one to receive a donation
+                'singletx' : 'singletx', # iff true, donations are made with 1 big tx covering all coins, hindering privacy but saving on fees
+                'history' : 'history', # a dict of address -> list of HistoryEntry entries
                 'initted' : 'initted', # boolean. if set, this data store has been initted before and doesn't need to get populated with defaults
             }
 
@@ -667,6 +699,10 @@ class Instance(QWidget, PrintError):
                 change_def = (10500, 100, 0)
                 d['charities'] = charities
                 d['change_def'] = change_def
+                d['autodonate'] = False
+                d['roundrobin'] = list()
+                d['singletx'] = False
+                d['history'] = dict()
                 d['initted'] = True
             return d
 
@@ -712,6 +748,42 @@ class Instance(QWidget, PrintError):
             except ValueError:
                 pass
 
+        def get_roundrobin(self):
+            return RoundRobin(self.get_data().get('roundrobin', list()))
+
+        def set_roundrobin(self, rr, save = False):
+            if not isinstance(rr, (list, tuple, RoundRobin, set)):
+                raise ValueError('set_roundrobin requires a list, tuple, set, or RoundRobin argument')
+            d = self.get_data()
+            d['roundrobin'] = list(rr)
+            self.put_data(d, save=save)
+
+        def get_history(self):
+            return self.get_data().get('history', dict())
+
+        def set_history(self, h, save = False):
+            if not isinstance(h, dict):
+                raise ValueError('set_history requires a dictionary argument')
+            d = self.get_data()
+            d['history'] = h
+            self.put_data(d, save = save)
+
+        def history_put_entry(self, hentry):
+            if not isinstance(hentry, self.HistoryEntry):
+                raise ValueError('history_put requires a HistoryEntry argument')
+            h = self.get_history()
+            l = h.get(hentry.address, list())
+            if hentry not in l:
+                l.append(hentry)
+            self.set_history(h, save = True)
+
+        def history_get_for_address(self, address):
+            return self.get_history().get(address, list())
+
+        def history_get_total_for_address(self, address):
+            l = self.history_get_for_address(address)
+            return sum([hentry.amount for hentry in l])
+
         def get_global_warn_high_thresh(self):
             return self.config.get(self.parent.plugin.name + '__WarnHighAmountThresh', True)
 
@@ -720,11 +792,14 @@ class Instance(QWidget, PrintError):
 
     class Engine(QObject, PrintError):
         ''' The donation engine.  Encapsulates all logic of picking coins to donate, prompting user, setting up Send tab, etc '''
-        def __init__(self, parent, wallet, data):
+        def __init__(self, parent, wallet, window, co_mgr, data):
             super().__init__(parent) # QObject c'tor
             self.parent = parent # class 'Instance' instance
             self.wallet = wallet
+            self.window = window
             self.data = data
+            self.co_mgr = co_mgr
+            self.rr = self.data.get_roundrobin()
 
         def diagnostic_name(self): # from PrintError
             return self.__class__.__name__ + "@" + self.parent.diagnostic_name()
@@ -732,6 +807,24 @@ class Instance(QWidget, PrintError):
         def on_set_label(self, name, text):
             ''' this will be used to catch tx's that have completed / been sent in non-auto-donate mode by embedding a cookie in tx desc '''
             self.print_error("set_label called with ", name, text)
+
+        def do_check(self):
+            coins, ct = self.co_mgr.get_coins(from_treewidget = False, eligible_only = True)
+            if coins:
+                charities = self.data.get_charities(valid_enabled_only = True)
+                charities = [ charity[1:] for charity in charities ] # get rid of the "enabled" column -- our round-robin list consits of name,address tuples
+                self.rr.update(charities)
+                if self.data.get_autodonate() and not self.wallet.has_password(): # pw check here again in case it changed in the meantime
+                    self.auto_donate(coins)
+                else:
+                    self.prompt_user(coins)
+
+        def auto_donate(self, coins):
+            pass
+
+        def prompt_user(self, coins):
+            pass
+
 
     # Uncomment to test object lifetime and make sure Qt is deleting us.
     #def __del__(self):
