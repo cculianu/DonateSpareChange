@@ -73,9 +73,10 @@ class Plugin(BasePlugin):
     def close_wallet(self, wallet):
         for instance in self.instances:
             if instance.wallet == wallet:
+                iname = instance.diagnostic_name()
                 instance.close()
                 self.instances.remove(instance) # pop it from the list of instances, python gc will remove it
-                self.print_error("removed instance:", instance.objectName())
+                self.print_error("removed instance:", iname)
                 return
 
     @hook
@@ -83,6 +84,7 @@ class Plugin(BasePlugin):
         for instance in self.instances:
             if instance.wallet == wallet:
                 instance.on_set_label(name, text)
+
 
 class Instance(QWidget, PrintError):
     ''' Encapsulates a wallet-specific instance. '''
@@ -101,7 +103,6 @@ class Instance(QWidget, PrintError):
         self.window = window
         self.window.installEventFilter(self)
         self.wallet_name = os.path.split(wallet.storage.path)[1]
-        self.setObjectName(self.diagnostic_name())
         self.data = self.DataModel(self, self.wallet.storage, self.plugin.config)
         self.already_warned_watching = False
         self.disabled = False
@@ -114,7 +115,7 @@ class Instance(QWidget, PrintError):
         self.ch_mgr = self.CharitiesMgr(self, self.ui, self.data)
         self.cr_mgr = self.CriteriaMgr(self, self.ui, self.data)
         self.co_mgr = self.CoinsMgr(self, self.ui, self.data)
-        self.engine = self.Engine(self, self.data)
+        self.engine = self.Engine(self, self.wallet, self.data)
 
         # connect any signals/slots
         self.cr_mgr.criteria_changed_signal.connect(self.co_mgr.refresh)
@@ -150,8 +151,7 @@ class Instance(QWidget, PrintError):
             for gb in gbs: gb.setEnabled(False) # disable all controls
 
     def on_set_label(self, name, text):
-        # TODO: Make this catch tx's that the user sends from send tab or transaction dialog and inform the Engine
-        self.print_error("set_label:",name,"=",text)
+        self.engine.on_set_label(name, text)
 
     def event(self, event):
         ''' overrides QObject: a hack used to detect when the prefs screen was closed or when our tab comes to foreground. '''
@@ -189,7 +189,7 @@ class Instance(QWidget, PrintError):
             return self.wallet.has_password()
         except AttributeError: # happens on watching-only wallets which don't have the requiside methods
             return False
-
+ 
     class CharitiesMgr(QObject, PrintError):
         ''' Manages the 'Charities' treewidget and associated GUI controls and per-wallet data. '''
 
@@ -720,13 +720,18 @@ class Instance(QWidget, PrintError):
 
     class Engine(QObject, PrintError):
         ''' The donation engine.  Encapsulates all logic of picking coins to donate, prompting user, setting up Send tab, etc '''
-        def __init__(self, parent, data):
+        def __init__(self, parent, wallet, data):
             super().__init__(parent) # QObject c'tor
             self.parent = parent # class 'Instance' instance
+            self.wallet = wallet
             self.data = data
 
         def diagnostic_name(self): # from PrintError
             return self.__class__.__name__ + "@" + self.parent.diagnostic_name()
+
+        def on_set_label(self, name, text):
+            ''' this will be used to catch tx's that have completed / been sent in non-auto-donate mode by embedding a cookie in tx desc '''
+            self.print_error("set_label called with ", name, text)
 
     # Uncomment to test object lifetime and make sure Qt is deleting us.
     #def __del__(self):
@@ -734,7 +739,7 @@ class Instance(QWidget, PrintError):
 
     # called by self.plugin on wallet close - deallocate all resources and die.
     def close(self):
-        self.print_error("Close called on",self.objectName())
+        self.print_error("Close called on an Instance")
         if self.wallet.network:
             self.wallet.network.unregister_callback(self.on_network_updated)
         if self.window:
