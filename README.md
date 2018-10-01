@@ -30,11 +30,13 @@ If you wish to encourage further development (or even just show your appreciatio
 3. From the Electron Cash application menu select `Tools -> Installed Plugins` and then click `Add Plugin`. Point the file dialog to the downloaded `donate_spare_change.zip`.
 4. This plugin will then be installed and enabled.
 
-## Security Warning ##
+## About Electron Cash Plugins ##
 
-I, Calin Culianu (cculianu) author of this plugin, affirm that there is no malicious code intentionally added to this plugin.  If you obtain this plugin from any source other than this github repository, proceed at your own risk!
+Electron Cash plugins have almost complete control over any wallets that are open.
 
-The reason this needs to be said, is that an enabled Electron Cash plugin has almost complete access and potential control over any wallets that are open.
+As such, only run plugins you obtain from official sources and from developers that you trust.
+
+I can assure you that I, Calin Culianu (cculianu), have written all of the code in this plugin myself and it contains 0% malicious code.  That being said: Feel free to audit the code yourself to be sure. :)
 
 ## Ultra-Brief Usage Overview ##
 
