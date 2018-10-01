@@ -287,7 +287,7 @@ class Instance(QWidget, PrintError):
         def check_ok(self, item_changed = None):
             items = self.ui.tree_charities.findItems("", Qt.MatchContains, 0)
             allValid = True
-            badBrush, goodBrush = QBrush(QColor("#BC1E1E")), QBrush()
+            badBrush, goodBrush = QBrush(QColor("#BC1E1E")), QApplication.instance().palette(self.ui.tree_charities).windowText()
             for i,item in enumerate(items):
                 name, address = (item.text(2), item.text(3))
                 #self.print_error("item ", i, "name=", name, "address=", address)
