@@ -124,7 +124,7 @@ class Instance(QWidget, PrintError):
         self.sig_user_tabbed_to_us.connect(self.on_user_tabbed_to_us)
         # connect cashaddr signal to refresh all UI addresses, etc
         self.window.cashaddr_toggled_signal.connect(self.refresh_all)
-        self.sig_window_unblocked.connect(self.ch_mgr.reload) # special case -- prefs screen may have closed and our units changed.
+        self.sig_window_unblocked.connect(self.ch_mgr.refresh) # special case -- prefs screen may have closed and our units changed.
 
         if self.wallet.network:
             self.wallet.network.register_callback(self.on_network_updated, ['updated'])
@@ -188,9 +188,12 @@ class Instance(QWidget, PrintError):
         return super().eventFilter(window, event)
 
     def refresh_all(self):
-        self.ch_mgr.refresh()
         self.cr_mgr.refresh()
         self.co_mgr.refresh()
+        # NB: we do NOT call ch_mgr.refresh() here because this refresh_all function is called a on_network and the user might be editing
+        # a charity at the time.
+        #
+        # instead, we explicitly call ch_mgr.refresh() in key places where we think it needs refreshing.
 
     def wallet_has_password(self):
         try:
@@ -231,6 +234,7 @@ class Instance(QWidget, PrintError):
             self.ui = ui
             self.data = data
             self.ui.tree_charities.setColumnWidth(0, 60)
+            self.refresh_blocked = False
 
             self.reload()
 
@@ -318,15 +322,19 @@ class Instance(QWidget, PrintError):
             self.save()
 
         def on_minus(self):
-            items = self.ui.tree_charities.selectedItems()
-            if items:
-                msg = _("Do you really wish to delete these {} items?").format(len(items)) if len(items) > 1 else _("Do you really wish to delete this item?")
-                if self.parent.window.question(msg=msg, title=_("Confirm Delete")):
-                    root = self.ui.tree_charities.invisibleRootItem()
-                    for item in items:
-                        root.removeChild(item) # item will get gc'd by Python
-                    self.save()
-            self.check_ok()
+            self.refresh_blocked = True
+            try:
+                items = self.ui.tree_charities.selectedItems()
+                if items:
+                    msg = _("Do you really wish to delete these {} items?").format(len(items)) if len(items) > 1 else _("Do you really wish to delete this item?")
+                    if self.parent.window.question(msg=msg, title=_("Confirm Delete")):
+                        root = self.ui.tree_charities.invisibleRootItem()
+                        for item in items:
+                            root.removeChild(item) # item will get gc'd by Python
+                        self.save()
+                self.check_ok()
+            finally:
+                self.refresh_blocked = False
 
         def on_plus(self):
             i = self.ui.tree_charities.topLevelItemCount() + 1
@@ -346,8 +354,8 @@ class Instance(QWidget, PrintError):
             self.data.set_charities(charities, save=True)
 
         def refresh(self):
-            # this doesn't need to be refreshed. ignore...
-            pass
+            if not self.refresh_blocked:
+                self.reload()
 
         def on_context_menu(self, point):
             if self.ui.tree_charities.selectedItems():
@@ -916,7 +924,7 @@ class Instance(QWidget, PrintError):
                         hentry = self.data.HistoryEntry(*hentry[:-1], txout)
                     self.data.history_put_entry(hentry, save=False)
                 self.data.save()
-                self.parent.ch_mgr.reload() # force history update
+                self.parent.ch_mgr.refresh() # force history update
 
         def set_foregrounded(self, b): self.is_foregrounded = b
 
@@ -1051,7 +1059,7 @@ class Instance(QWidget, PrintError):
                 if ct:
                     self.data.save()
                     self.window.notify(_("Auto-donated {} coins, {}").format(ct,self.window.format_amount_and_units(int(tot))))
-                    self.parent.ch_mgr.reload() # so that we see the new history immediately
+                    self.parent.ch_mgr.refresh() # so that we see the new history immediately
 
 
             show_please_wait(msg=_("Auto-Donating, please wait..."), title=self.parent.plugin.shortName(),
