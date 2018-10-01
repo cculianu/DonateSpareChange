@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1114</width>
+    <width>1054</width>
     <height>519</height>
    </rect>
   </property>
@@ -161,7 +161,7 @@
       <item row="2" column="1">
        <widget class="QPushButton" name="bt_donate_selected">
         <property name="toolTip">
-         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Create new transactions, 1 tx per donation, for all the coins you selected that are &lt;span style=&quot; font-weight:600;&quot;&gt;eligible&lt;/span&gt;.&lt;/p&gt;&lt;p&gt;Recipients will be selected in a round-robin fashion from the set of all recipients.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Create a new transaction for all the coins you selected that are &lt;span style=&quot; font-weight:600;&quot;&gt;eligible&lt;/span&gt;.&lt;/p&gt;&lt;p&gt;Recipients will be selected in a round-robin fashion from the set of all recipients.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
         <property name="text">
          <string>Donate Selected</string>
@@ -184,7 +184,7 @@
       <item row="2" column="3">
        <widget class="QPushButton" name="bt_donate_all">
         <property name="toolTip">
-         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Create new transactions, 1 tx per donation, for all the coins in your wallet that are &lt;span style=&quot; font-weight:600;&quot;&gt;eligible&lt;/span&gt;.&lt;/p&gt;&lt;p&gt;Recipients will be selected in a round-robin fashion from the set of all recipients.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Create a new transaction for all the coins in your wallet that are &lt;span style=&quot; font-weight:600;&quot;&gt;eligible&lt;/span&gt;.&lt;/p&gt;&lt;p&gt;Recipients will be selected in a round-robin fashion from the set of all recipients.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
         <property name="text">
          <string>Donate All Eligible</string>
@@ -650,13 +650,23 @@
         </property>
        </spacer>
       </item>
-      <item row="3" column="0" colspan="2">
+      <item row="3" column="0">
        <widget class="QCheckBox" name="chk_autodonate">
         <property name="toolTip">
          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Auto-donate coins &lt;span style=&quot; font-weight:600;&quot;&gt;in the background&lt;/span&gt; (without prompting) as they become eligible. &lt;/p&gt;&lt;p&gt;This feature requires that your wallet not be password-protected.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
         <property name="text">
-         <string>Auto-donate change  without prompting</string>
+         <string>Auto-donate change</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1" colspan="2">
+       <widget class="QCheckBox" name="chk_1tx">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;When this is &lt;span style=&quot; font-weight:600;&quot;&gt;enabled&lt;/span&gt;, all coins that meet the specified criteria are batched together in 1 single sending transaction.&lt;/p&gt;&lt;p&gt;For the cost minded: This has the advantage of conserving on &lt;span style=&quot; font-weight:600;&quot;&gt;fees&lt;/span&gt;.&lt;/p&gt;&lt;p&gt;For the privacy minded: It becomes easier to associate your receiving addresses with each other if you turn this option on. So if &lt;span style=&quot; font-weight:600;&quot;&gt;privacy&lt;/span&gt; is your concern, leave this option &lt;span style=&quot; font-weight:600;&quot;&gt;disabled&lt;/span&gt;.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-style:italic;&quot;&gt;Note: This option only appies to &lt;/span&gt;&lt;span style=&quot; font-weight:600; font-style:italic;&quot;&gt;auto-donation mode&lt;/span&gt;&lt;span style=&quot; font-style:italic;&quot;&gt;. &lt;/span&gt;To control batching in manual mode, select single or multiple items from the table below.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Batch all sends as a single transacton</string>
         </property>
        </widget>
       </item>

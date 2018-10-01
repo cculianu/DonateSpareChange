@@ -1,13 +1,14 @@
-import sys, os, time
+import sys, os, time, binascii, math
 
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 
 from electroncash.address import Address
+from electroncash.bitcoin import TYPE_ADDRESS
 from electroncash.i18n import _
 from electroncash.plugins import BasePlugin, hook
-from electroncash.util import PrintError
+from electroncash.util import PrintError, profiler, NotEnoughFunds, ExcessiveFee, InvalidPassword
 from electroncash_gui.qt.amountedit import BTCAmountEdit
 from collections import OrderedDict, namedtuple
 
@@ -135,6 +136,7 @@ class Instance(QWidget, PrintError):
             self.sig_network_updated.emit() # this passes the call to the gui thread
 
     def on_user_tabbed_to_us(self):
+        #self.print_error("user tabbed to us")
         warn_user = False
         try:
             if self.wallet.is_watching_only() and not self.already_warned_watching:
@@ -274,6 +276,14 @@ class Instance(QWidget, PrintError):
         def on_item_changed(self, item, column):
             if column == 0: return
             if column == 1: item.setText(1, item.data(1, Qt.UserRole)); return # suppress editing of amounts column and just restore its previous value
+            if column == 3:
+                address = item.text(3)
+                if address.lower().strip().startswith("bitcoincash:"):
+                    # strip out bitcoincash: part as it just wastes screen space.
+                    tmp = address.split(":")
+                    if len(tmp) == 2:
+                        address = ':'.join(tmp[1:])
+                        item.setText(3, address)
             self.check_ok(item)
             self.save()
 
@@ -322,6 +332,7 @@ class Instance(QWidget, PrintError):
 
         criteria_changed_signal = pyqtSignal()
         user_began_editing_signal = pyqtSignal()
+        autodonate_disabled_signal = pyqtSignal()
 
         WARN_HIGH_AMOUNT = 200000 # in sats: 2 mBCH
 
@@ -359,6 +370,7 @@ class Instance(QWidget, PrintError):
             self.ui.amount_edit.textChanged.connect(self.on_amount_changed)
             self.ui.sb_age.valueChanged.connect(self.on_age_changed)
             self.ui.chk_autodonate.clicked.connect(self.on_auto_checked)
+            self.ui.chk_1tx.clicked.connect(self.on_singletx_checked)
 
             self.parent.sig_user_tabbed_from_us.connect(self.cleanup_popup_label)
             self.parent.sig_window_moved.connect(self.cleanup_popup_label)
@@ -375,7 +387,11 @@ class Instance(QWidget, PrintError):
         def reload(self):
             cd = self.data.get_changedef()
             is_auto = self.data.get_autodonate() and not self.parent.wallet_has_password()
-            self.ui.chk_autodonate.setChecked(is_auto)
+            if not is_auto and self.data.get_autodonate():
+                self.on_auto_checked(False) # force the setting off
+            else:
+                self.ui.chk_autodonate.setChecked(is_auto)
+            self.ui.chk_1tx.setChecked(self.data.get_singletx())
             threshSats, minage, agetype = cd
             self.ui.amount_edit.setAmount(threshSats)
             self.ui.sb_age.setValue(minage)
@@ -387,7 +403,7 @@ class Instance(QWidget, PrintError):
             if sats is not None:
                 #self.print_error("sats",sats)
                 cd = self.data.get_changedef()
-                if sats >= self.WARN_HIGH_AMOUNT and self.data.get_global_warn_high_thresh() and time.time()-self.last_warned > 10.0:
+                if sats >= self.WARN_HIGH_AMOUNT and self.data.get_warn_high_thresh() and time.time()-self.last_warned > 10.0:
                     # Custom logic to warn the user if they specify an amount above self.WARN_HIGH_AMOUNT
                     self.ui.amount_edit.blockSignals(True)
                     reply = custom_question_box(msg = (_("You specified a spare change threshold that is rather high (above {}).").format(self.parent.window.format_amount_and_units(self.WARN_HIGH_AMOUNT))
@@ -407,7 +423,7 @@ class Instance(QWidget, PrintError):
                     else:
                         if reply != _("Yes"):
                             # they wish to proceed.. and never be asked again!
-                            self.data.set_global_warn_high_thresh(False)
+                            self.data.set_warn_high_thresh(False)
                         # the below ends up calling us again with the same value. We do this to make sure the GUI and us are in synch (can get out of synch due to blocked signals above)
                         # Note: the above check won't be invoked again immediately though, because the last_warned timeout won't have expired.
                         self.ui.amount_edit.setAmount(sats)
@@ -422,6 +438,7 @@ class Instance(QWidget, PrintError):
             self.criteria_changed_signal.emit()
 
         def on_auto_checked(self, b):
+            was = self.data.get_autodonate()
             if b:
                 self.cleanup_popup_label()
                 if self.parent.wallet_has_password():
@@ -442,6 +459,11 @@ class Instance(QWidget, PrintError):
                         b = False
             self.ui.chk_autodonate.setChecked(b)
             self.data.set_autodonate(b, save = True)
+            if was and not b:
+                self.autodonate_disabled_signal.emit()
+            
+        def on_singletx_checked(self, b):
+            self.data.set_singletx(b, save = True)
 
         def on_user_began_editing(self):
             self.print_error("User began editing, disabling auto-pay")
@@ -451,7 +473,7 @@ class Instance(QWidget, PrintError):
 
                 class MyPopupLabel(PopupLabel):
                     def mousePressEvent(self, e):
-                        self.cmgr.cleanup_popup_label()
+                        if self.cmgr: self.cmgr.cleanup_popup_label()
                         return super().mousePressEvent(e)
                 if self.popup_label:
                     self.cleanup_popup_label()
@@ -518,10 +540,6 @@ class Instance(QWidget, PrintError):
             self.active = b
             #self.print_error("Active status set to:","ACTIVE" if b else "INACTIVE")
 
-        def on_close(self):
-            if self.parent.wallet.network:
-                self.parent.wallet.network.unregister_callback(self.on_updated)
-
         def refresh(self):
             #self.print_error("refresh")
             self.reload()
@@ -553,8 +571,9 @@ class Instance(QWidget, PrintError):
                     c['age'] = (lh - c['height']) + 1 if c['height'] and c['height'] > 0 else -1
                     valtest = c['value'] <  amount
                     agetest = age <= 0 or ( c['age'] >= age )
+                    dusttest = c['value'] > 770 # we hard-code 546 + 224 as the minimal size we consider "dust"
                     #self.print_error("lh",lh,"cheight",c['height'],"age",age)
-                    c['is_eligible'] = int(not c['is_frozen'] and valtest and agetest)
+                    c['is_eligible'] = int(not c['is_frozen'] and valtest and agetest and dusttest)
                     if c['is_eligible']:
                         c['eligibility_text'] = _("Eligible for donation")
                         okcoins += 1
@@ -563,8 +582,10 @@ class Instance(QWidget, PrintError):
                         reasons = []
                         if c['is_frozen']: reasons.append(_("Frozen"))
                         else:
-                            if not valtest: reasons.append(_("Amount"))
-                            if not agetest: reasons.append(_("Age"))
+                            if not dusttest: reasons.append(_("Dust"))
+                            else:
+                                if not valtest: reasons.append(_("Amount"))
+                                if not agetest: reasons.append(_("Age"))
                         c['eligibility_text'] = txt + ', '.join(reasons)
                 coins.sort(key=lambda c: [ c['is_frozen'], 100-c['is_eligible'], c['value'], c['height'], ], reverse = False)
                 if eligible_only:
@@ -610,7 +631,8 @@ class Instance(QWidget, PrintError):
         def add_item(self, c):
             address, value, height, is_frozen, is_eligible, status = c.get('address').to_ui_string(), c.get('value'), c.get('height'), c.get('is_frozen'), c.get('is_eligible'), c.get('eligibility_text')
             amtText = self.parent.window.format_amount(value) + ' '+ self.parent.window.base_unit()
-            ageText = (str(c.get('age')) + " blks") if c.get('age') > -1 else _("unconf.")
+            age = c.get('age')
+            ageText = (str(age) + " blk" + ("s" if age > 1 else "")) if age > -1 else _("unconf.")
             item = QTreeWidgetItem(self.ui.tree_coins, [amtText, address, ageText, status])
             item.setFlags(item.flags() & ~Qt.ItemIsEditable)
             item.setData(0, Qt.UserRole, c) # save the coin itself inside the item.. in case we need it later
@@ -657,12 +679,14 @@ class Instance(QWidget, PrintError):
         def on_donate_selected(self):
             coins, okcount = self.get_coins(from_treewidget = True, eligible_only = True, selected_only = True)
             if coins:
-                self.print_error("on_donate_selected",*[self.get_name(coin) for coin in coins])
+                if not self.parent.engine.manual_donate(coins):
+                    self.parent.window.show_error(_("No charities are enabled!"))
 
         def on_donate_all(self):
             coins, okcount = self.get_coins(from_treewidget = True, eligible_only = True, selected_only = False)
             if coins:
-                self.print_error("on_donate_all", *[self.get_name(coin) for coin in coins])
+                if not self.parent.engine.manual_donate(coins):
+                    self.parent.window.show_error(_("No charities are enabled!"))
 
 
     # nested class.. handles writing our data dict to/from persisten store
@@ -683,6 +707,7 @@ class Instance(QWidget, PrintError):
                 'roundrobin' : 'roundrobin', # list of active charities in round-robin fashion. leftmost entry is the next one to receive a donation
                 'singletx' : 'singletx', # iff true, donations are made with 1 big tx covering all coins, hindering privacy but saving on fees
                 'history' : 'history', # a dict of address -> list of HistoryEntry entries
+                'warn_hi' : 'warn_hi', # if true, warn user when inputting change threshold above 2 mBCH (default: True)
                 'initted' : 'initted', # boolean. if set, this data store has been initted before and doesn't need to get populated with defaults
             }
 
@@ -696,17 +721,18 @@ class Instance(QWidget, PrintError):
                     (True, "Coins4Clothes", "qzx4tqcldmvs4up9mewkf3ru0z6vy9wm6qm782fwla"),
                     (False, "Calin", "qplw0d304x9fshz420lkvys2jxup38m9symky6k028"),
                 ]
-                change_def = (10500, 100, 0)
+                change_def = (10500, 3, 0) # sats, blocks, age_type(not used yet)
                 d['charities'] = charities
                 d['change_def'] = change_def
                 d['autodonate'] = False
                 d['roundrobin'] = list()
                 d['singletx'] = False
                 d['history'] = dict()
+                d['warn_hi'] = True
                 d['initted'] = True
             return d
 
-        def put_data(self, datadict, save=False):
+        def put_data(self, datadict, save=True):
             self.storage.put(self.keys['root'], datadict)
             if save: self.save()
 
@@ -720,7 +746,7 @@ class Instance(QWidget, PrintError):
                 ret = [r for r in ret if r[0] and Address.is_valid(r[2])]
             return ret
 
-        def set_charities(self, charities, save=False):
+        def set_charities(self, charities, save=True):
             if isinstance(charities, list):
                 d = self.get_data()
                 d['charities'] = charities
@@ -730,7 +756,7 @@ class Instance(QWidget, PrintError):
             d = self.get_data()
             return d.get('change_def')
 
-        def set_changedef(self, cd, save=False):
+        def set_changedef(self, cd, save=True):
             if isinstance(cd, (tuple, list)) and len(cd) >= 3:
                 d = self.get_data()
                 d['change_def'] = cd
@@ -739,7 +765,7 @@ class Instance(QWidget, PrintError):
         def get_autodonate(self):
             return self.get_data().get('autodonate', False)
 
-        def set_autodonate(self, b, save = False):
+        def set_autodonate(self, b, save = True):
             try:
                 b = bool(b)
                 d = self.get_data()
@@ -751,7 +777,7 @@ class Instance(QWidget, PrintError):
         def get_roundrobin(self):
             return RoundRobin(self.get_data().get('roundrobin', list()))
 
-        def set_roundrobin(self, rr, save = False):
+        def set_roundrobin(self, rr, save = True):
             if not isinstance(rr, (list, tuple, RoundRobin, set)):
                 raise ValueError('set_roundrobin requires a list, tuple, set, or RoundRobin argument')
             d = self.get_data()
@@ -761,37 +787,65 @@ class Instance(QWidget, PrintError):
         def get_history(self):
             return self.get_data().get('history', dict())
 
-        def set_history(self, h, save = False):
+        def set_history(self, h, save = True):
             if not isinstance(h, dict):
                 raise ValueError('set_history requires a dictionary argument')
             d = self.get_data()
             d['history'] = h
             self.put_data(d, save = save)
 
-        def history_put_entry(self, hentry):
+        def history_put_entry(self, hentry, save = True):
             if not isinstance(hentry, self.HistoryEntry):
                 raise ValueError('history_put requires a HistoryEntry argument')
             h = self.get_history()
             l = h.get(hentry.address, list())
+            wasempty = not bool(l)
             if hentry not in l:
                 l.append(hentry)
-            self.set_history(h, save = True)
+            if wasempty: h[hentry.address] = l
+            self.set_history(h, save = save)
 
         def history_get_for_address(self, address):
-            return self.get_history().get(address, list())
+            l = self.get_history().get(address, list())
+            ret = list()
+            for item in l:
+                hentry = self.HistoryEntry(*item)
+                ret.append(hentry)
+            return ret
 
         def history_get_total_for_address(self, address):
             l = self.history_get_for_address(address)
             return sum([hentry.amount for hentry in l])
 
-        def get_global_warn_high_thresh(self):
-            return self.config.get(self.parent.plugin.name + '__WarnHighAmountThresh', True)
+        def get_singletx(self):
+            return self.get_data().get('singletx', False)
 
-        def set_global_warn_high_thresh(self, b):
-            self.config.set_key(self.parent.plugin.name + '__WarnHighAmountThresh', bool(b))
+        def set_singletx(self, b, save = True):
+            try:
+                b = bool(b)
+                d = self.get_data()
+                d['singletx'] = b
+                self.put_data(d, save=save)
+            except ValueError:
+                pass
+
+        def get_warn_high_thresh(self):
+            return self.get_data().get('warn_hi', True)
+
+        def set_warn_high_thresh(self, b, save = True):
+            try:
+                b = bool(b)
+                d = self.get_data()
+                d['warn_hi'] = b
+                self.put_data(d, save=save)
+            except ValueError:
+                pass            
 
     class Engine(QObject, PrintError):
         ''' The donation engine.  Encapsulates all logic of picking coins to donate, prompting user, setting up Send tab, etc '''
+        
+        timer_interval = 10 * 1e3 # value is Qt ms value -- 10 second interval
+      
         def __init__(self, parent, wallet, window, co_mgr, data):
             super().__init__(parent) # QObject c'tor
             self.parent = parent # class 'Instance' instance
@@ -799,7 +853,21 @@ class Instance(QWidget, PrintError):
             self.window = window
             self.data = data
             self.co_mgr = co_mgr
+            self.parent.cr_mgr.autodonate_disabled_signal.connect(self.on_autodonate_disabled)
             self.rr = self.data.get_roundrobin()
+            self.timer = QTimer(self)
+            self.timer.setInterval(self.timer_interval) # wake up every 10 seconds
+            self.timer.timeout.connect(self.do_check)
+            self.timer.start()
+            self.is_foregrounded = False
+            self.last_notify_set = set()
+            self.pending_tx_histories = dict() # dict of tx_desc -> list of HistoryEntry
+            self.suppress_auto = 0
+            
+            self.parent.sig_user_tabbed_to_us.connect(lambda: self.set_foregrounded(True))
+            self.parent.sig_user_tabbed_from_us.connect(lambda: self.set_foregrounded(False))
+            
+            self.update_rr()
 
         def diagnostic_name(self): # from PrintError
             return self.__class__.__name__ + "@" + self.parent.diagnostic_name()
@@ -807,23 +875,243 @@ class Instance(QWidget, PrintError):
         def on_set_label(self, name, text):
             ''' this will be used to catch tx's that have completed / been sent in non-auto-donate mode by embedding a cookie in tx desc '''
             self.print_error("set_label called with ", name, text)
+            hentries = self.pending_tx_histories.pop(text, None)
+            if hentries:
+                for hentry in hentries:
+                    txout = hentry[-1]
+                    if txout.find(':') < 0:
+                        # was missing txid because this was generated by manual_donate where tx was unsigned
+                        txout = name + ":" + txout
+                        hentry = self.data.HistoryEntry(*hentry[:-1], txout)
+                    self.data.history_put_entry(hentry, save=False)
+                self.data.save()
+                self.parent.ch_mgr.reload() # force history update
 
+        def set_foregrounded(self, b): self.is_foregrounded = b
+
+        def update_rr(self):
+            charities = self.data.get_charities(valid_enabled_only = True)
+            charities = [ tuple(charity[1:]) for charity in charities ] # get rid of the "enabled" column -- our round-robin list consits of name,address tuples
+            self.rr.update(charities) #.update preserves original order for ones that are kept.
+            return bool(self.rr)
+
+        @profiler
         def do_check(self):
+            if self.parent.disabled:
+                return
+            if not self.wallet.network or not self.wallet.network.is_connected() or not self.wallet.network.is_up_to_date() or not self.wallet.is_up_to_date():
+                self.print_error("Network not connected or wallet/network not up-to-date, will try again later...")
+                return
             coins, ct = self.co_mgr.get_coins(from_treewidget = False, eligible_only = True)
-            if coins:
-                charities = self.data.get_charities(valid_enabled_only = True)
-                charities = [ charity[1:] for charity in charities ] # get rid of the "enabled" column -- our round-robin list consits of name,address tuples
-                self.rr.update(charities)
+            if coins and self.update_rr():
                 if self.data.get_autodonate() and not self.wallet.has_password(): # pw check here again in case it changed in the meantime
-                    self.auto_donate(coins)
+                    if not self.suppress_auto:
+                        self.auto_donate(coins)
+                    else:
+                        self.print_error("Auto-donate suppressed due to extant donations-related txdialog")
                 else:
-                    self.prompt_user(coins)
+                    self.notify_user(coins)
+            
+        def newref(self): return str(binascii.hexlify(os.urandom(8))).split("'")[1]
 
+        def manual_donate(self, coins):
+            ''' NB: for now this always makes 1 big batched tx '''
+            if not self.update_rr() or not coins:
+                return 0
+            tx, desc, ref, donees = self.make_transaction(coins)
+            if not tx:
+                self.show_error(_("There was a problem creating the transaction. Please contact the developer."))
+                return -1
+            i = 0
+            for donee,amt in donees.items():
+                name,address = donee
+                # address name amount ref txout
+                hentry = self.data.HistoryEntry(address,name,amt,ref,str(i))
+                l = self.pending_tx_histories.get(desc,list())
+                l.append(hentry)
+                self.pending_tx_histories[desc] = l
+                i += 1
+
+            # .. aaaand Show it!
+            self.window.show_transaction(tx, desc)
+            
+            if self.data.get_autodonate():
+                ''' Hack -- in case the user hit "donate eligible" while in auto-mode, suppress auto-donation while
+                    the tx dialog is up using this monkey-patching technique. ;) '''
+
+                try:
+                    from electroncash_gui.qt.transaction_dialog import dialogs
+                    txdlg = dialogs[-1]
+                    origMethod = txdlg.closeEvent
+                    def myCloseEvent(event):
+                        if not self.parent or not self.parent.plugin:
+                            origMethod(event)
+                            return # early return -- plugin was closed!
+                        self.print_error("monkey-patched tx dialog close called", event)
+                        origMethod(event)
+                        if event.isAccepted() and self.suppress_auto:
+                            self.suppress_auto -= 1
+                            self.print_error("tx dialog close suppress_auto =", self.suppress_auto)
+                    txdlg.closeEvent = myCloseEvent
+                    self.suppress_auto += 1
+                except (AttributeError, ImportError):
+                    import traceback
+                    traceback.print_exc()
+                    self.print_error("Could not suppress auto")
+                    
+            return 1
+        
+        def on_autodonate_disabled(self):
+            self.suppress_auto = 0 # turn off 'auto' suppression because user messed with UI
+
+        
         def auto_donate(self, coins):
-            pass
+            self.print_error("Auto-donate called with ", coins)
+            def on_box_is_up():
+                if not self.parent or not self.parent.plugin:
+                    return # early return -- auto kicked off just as the window was closing. abort!
+                txs = []
+                try:
+                    if self.data.get_singletx():
+                        tx, desc, ref, donees = self.make_transaction(coins)
+                        self.wallet.sign_transaction(tx, None)
+                        txs.append((tx, desc, ref, donees))
+                    else:
+                        for c in coins:
+                            tx, desc, ref, donees = self.make_transaction([c])
+                            self.wallet.sign_transaction(tx, None)
+                            txs.append((tx, desc, ref, donees))
+                except InvalidPassword:
+                    self.data.set_autodonate(False)
+                    self.parent.cr_mgr.refresh()
+                    self.show_error(_("Wallet now has a password. Auto-donate was turned off."))
+                    return
+ 
+                bcast = None
+                network = self.wallet.network
+                if hasattr(network, 'broadcast_transaction'):
+                    bcast = network.broadcast_transaction
+                elif hasattr(network, 'broadcast'):
+                    bcast = network.broadcast
+                else:
+                    # wtf. someone changed the API
+                    self.show_error(_("Don't know how to broadcast a transaction. Are you on Electron Cash 3.2 or above?"))
+                    return
+                ct = 0
+                tot = 0
+                for tx,desc,ref,donees in txs:
+                    if tx is None:
+                        self.print_error("WARNING: tx is None for", desc)
+                        continue
+                    status, data = bcast(tx)
+                    if status:
+                        if data != tx.txid(): self.print_error("Warning: txid != data", data, tx.txid())
+                        self.wallet.set_label(tx.txid(), desc)
+                        i = 0
+                        for donee,amt in donees.items():
+                            name,address = donee
+                            # address name amount ref txout
+                            self.data.history_put_entry(self.data.HistoryEntry(address,name,amt,ref,tx.txid()+":"+str(i)), save=False)
+                            i += 1
+                            ct += 1
+                            tot += amt
+                    else:
+                        self.print_error("WARNING: got false status for", desc,tx.txid())
+                if ct:
+                    self.data.save()
+                    self.window.notify(_("Auto-donated {} coins, {}").format(ct,self.window.format_amount_and_units(int(tot))))
+                    self.parent.ch_mgr.reload() # so that we see the new history immediately
+                    
 
-        def prompt_user(self, coins):
-            pass
+            show_please_wait(msg=_("Auto-Donating, please wait..."), title=self.parent.plugin.shortName(),
+                             parent=None, on_shown=on_box_is_up)
+            
+        def make_transaction(self, coins):
+            totalSats = 0
+            ref = self.newref()
+            desc = self.parent.plugin.shortName() + ": "
+            donees = dict()
+            outputs = list()
+            for coin in coins:
+                donee = self.rr.front(); self.rr.to_back()
+                amt = donees.get(donee, 0)
+                sats = coin['value']
+                amt += sats
+                totalSats += sats
+                donees[donee] = amt
+            for donee,amt in donees.items():
+                addr_str = donee[1]
+                address = Address.from_string(addr_str)
+                outputs.append((TYPE_ADDRESS, address, int(amt)))
+            desc += ', '.join([donee[0] for donee in donees])
+            desc += " (ref: %s)" % ref
+            
+            tx = None
+            try:
+                # first make a 0-fee tx to figure out the tx size.
+                tx0 = self.wallet.make_unsigned_transaction(inputs=coins, outputs=outputs, config=self.window.config, fixed_fee=0)
+                size = tx0.estimated_size()
+                # next, make each output pay a portion of the fee to reach 1.0 sats/B
+                each_fee = int(math.ceil(size / len(outputs)))
+                #print("got size",size,"each_fee",each_fee)
+                #print("old outputs",outputs)
+                outputs = [ (o[0], o[1], o[2]-each_fee) for o in outputs ]
+                donees = { d:v-each_fee for d,v in donees.items() }
+                #print("revised outputs",outputs)
+                if any([ bool(o[2] <= 0) for o in outputs]):
+                    raise NotEnoughFunds
+                tx = self.wallet.make_unsigned_transaction(inputs=coins, outputs=outputs, config=self.window.config, fixed_fee=each_fee*len(outputs))
+            except NotEnoughFunds:
+                self.show_error(_("Insufficient funds"))
+            except ExcessiveFee:
+                self.show_error(_("Excessive Fee"))
+            except BaseException as e:
+                import traceback
+                traceback.print_exc()
+                self.print_error("Outputs:",outputs)
+                self.show_error(str(e) or "Unknown Error")
+
+            self.data.set_roundrobin(self.rr)
+            return tx, desc, ref, donees        
+
+        def show_error(self, msg):
+            self.window.show_error(msg = (self.parent.plugin.shortName() + ":\n\n" + msg))
+        
+        def notify_user(self, coins):
+            #self.print_error("Prompt user called with", coins)
+            if not coins: return
+            if self.is_foregrounded:
+                # We don't do anything when the user has the tab open, because they can do
+                # manual donations then, so they don't need to be prompted.
+                #self.print_error("Not notifying user, tab is foregrounded.")
+                return
+            '''
+            if (self.window.tabs.currentWidget() == self.window.send_tab
+                and self.window.message_e.text().startswith(self.parent.plugin.shortName() + ":")
+                and self.window.message_e.isReadOnly()):
+                # todo: only suppress here if the active send tab thing is our tx?
+                #self.print_error("Not notifying user, send tab is already active.")
+                return
+            '''
+            coinset = { self.co_mgr.get_name(c) for c in coins }
+            if coinset == self.last_notify_set:
+                #self.print_error("Not notifying user, set of coins hasn't changed.")
+                return
+            msg = [
+                _("You have {} coins eligible for donation totaling {}.").format(len(coins),
+                                                                                 self.window.format_amount_and_units(sum([c['value'] for c in coins])) ),
+                "",
+                #_("Do you wish to go to the Send tab and donate now?")
+                _("(Go to the 'Donate Change' tab to donate)")
+            ]
+            self.window.notify(msg[0]) #'\n'.join(msg))
+            self.last_notify_set = coinset
+
+        def do_send_tab_send(self, coins):
+            self.print_error("Do send tab send called with", coins)
+            
+        def close(self):
+            self.timer.stop()
 
 
     # Uncomment to test object lifetime and make sure Qt is deleting us.
@@ -833,6 +1121,7 @@ class Instance(QWidget, PrintError):
     # called by self.plugin on wallet close - deallocate all resources and die.
     def close(self):
         self.print_error("Close called on an Instance")
+        self.engine.close()
         if self.wallet.network:
             self.wallet.network.unregister_callback(self.on_network_updated)
         if self.window:
@@ -894,18 +1183,42 @@ class RoundRobin(list):
         return self
 
 
-def custom_question_box(msg, title="", buttons=[_("Cancel"), _("Ok")], parent = None):
-    mb = QMessageBox(QMessageBox.Question, title, msg, QMessageBox.NoButton, parent)
-    if not buttons: buttons = [_("Ok")] # make sure we have at least 1 button!
+def custom_question_box(msg, title="", buttons=[_("Cancel"), _("Ok")], parent = None, icon = QMessageBox.Question):
+
+    mb = QMessageBox(icon, title, msg, QMessageBox.NoButton, parent)
+    if not buttons: [_("Ok")] # make sure we have at least 1 button!
     if isinstance(buttons, dict):
         for but,role in buttons.items():
             mb.addButton(but, role)
     else:
         for i,but in enumerate(buttons):
             mb.addButton(but, QMessageBox.AcceptRole if i > 0 else QMessageBox.RejectRole)
-    mb.exec()
+    mb.setWindowModality(Qt.WindowModal if parent else Qt.ApplicationModal)
+    mb.exec_()
     clicked = mb.clickedButton()
-    return clicked.text()
+    return clicked.text() if clicked else ""
+
+def show_please_wait(msg, title=_("Please wait"), parent = None, on_shown = None):
+    from electroncash_gui.qt.util import WindowModalDialog
+
+    class MyDlg(WindowModalDialog):
+        sig_shown = pyqtSignal(object)
+        def showEvent(self, event):
+            ret = super().showEvent(event)
+            do_later(self, 20, lambda: self.sig_shown.emit(self))
+            #self.sig_shown.emit(self)
+            return ret
+    
+    dlg = MyDlg(parent=parent, title = title)
+    if callable(on_shown):
+        dlg.sig_shown.connect(on_shown)
+    dlg.sig_shown.connect(lambda x: x.accept()) # force to close if we get to this point
+    vbox = QVBoxLayout(dlg)
+    vbox.addWidget(QLabel(msg))
+    dlg.setWindowModality(Qt.WindowModal if parent else Qt.ApplicationModal)
+
+    dlg.exec_()
+    dlg.deleteLater()
 
 def do_later(parent, when_ms, fun, *args):
     timer = QTimer(parent)

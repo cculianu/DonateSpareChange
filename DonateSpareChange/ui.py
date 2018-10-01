@@ -11,7 +11,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_Instance(object):
     def setupUi(self, Instance):
         Instance.setObjectName("Instance")
-        Instance.resize(1114, 519)
+        Instance.resize(1054, 519)
         self.gridLayout_4 = QtWidgets.QGridLayout(Instance)
         self.gridLayout_4.setContentsMargins(6, 6, 6, 6)
         self.gridLayout_4.setVerticalSpacing(20)
@@ -197,7 +197,10 @@ class Ui_Instance(object):
         self.gridLayout_5.addItem(spacerItem6, 2, 0, 1, 1)
         self.chk_autodonate = QtWidgets.QCheckBox(self.gb_criteria)
         self.chk_autodonate.setObjectName("chk_autodonate")
-        self.gridLayout_5.addWidget(self.chk_autodonate, 3, 0, 1, 2)
+        self.gridLayout_5.addWidget(self.chk_autodonate, 3, 0, 1, 1)
+        self.chk_1tx = QtWidgets.QCheckBox(self.gb_criteria)
+        self.chk_1tx.setObjectName("chk_1tx")
+        self.gridLayout_5.addWidget(self.chk_1tx, 3, 1, 1, 2)
         self.gridLayout_5.setColumnStretch(0, 1)
         self.gridLayout_5.setColumnStretch(1, 1)
         self.gridLayout_4.addWidget(self.gb_criteria, 0, 1, 3, 1)
@@ -222,9 +225,9 @@ class Ui_Instance(object):
         self.tree_coins.topLevelItem(0).setText(3, _translate("Instance", "123 blocks old, eligible for donation"))
         self.tree_coins.setSortingEnabled(__sortingEnabled)
         self.lbl_utxos.setText(_translate("Instance", "2/16 coins meet specified criteria"))
-        self.bt_donate_selected.setToolTip(_translate("Instance", "<html><head/><body><p>Create new transactions, 1 tx per donation, for all the coins you selected that are <span style=\" font-weight:600;\">eligible</span>.</p><p>Recipients will be selected in a round-robin fashion from the set of all recipients.</p></body></html>"))
+        self.bt_donate_selected.setToolTip(_translate("Instance", "<html><head/><body><p>Create a new transaction for all the coins you selected that are <span style=\" font-weight:600;\">eligible</span>.</p><p>Recipients will be selected in a round-robin fashion from the set of all recipients.</p></body></html>"))
         self.bt_donate_selected.setText(_translate("Instance", "Donate Selected"))
-        self.bt_donate_all.setToolTip(_translate("Instance", "<html><head/><body><p>Create new transactions, 1 tx per donation, for all the coins in your wallet that are <span style=\" font-weight:600;\">eligible</span>.</p><p>Recipients will be selected in a round-robin fashion from the set of all recipients.</p></body></html>"))
+        self.bt_donate_all.setToolTip(_translate("Instance", "<html><head/><body><p>Create a new transaction for all the coins in your wallet that are <span style=\" font-weight:600;\">eligible</span>.</p><p>Recipients will be selected in a round-robin fashion from the set of all recipients.</p></body></html>"))
         self.bt_donate_all.setText(_translate("Instance", "Donate All Eligible"))
         self.gb_charities.setToolTip(_translate("Instance", "<html><head/><body><p>Specify a list of recipients to receive your spare change.</p><p>Donations will be made in a round-robin fashion from the set of enabled recipients with a valid address specified.</p></body></html>"))
         self.gb_charities.setTitle(_translate("Instance", "Charities / Donation Destinations"))
@@ -261,6 +264,8 @@ class Ui_Instance(object):
         self.cb_age.setItemText(2, _translate("Instance", "Days"))
         self.cb_age.setItemText(3, _translate("Instance", "Weeks"))
         self.chk_autodonate.setToolTip(_translate("Instance", "<html><head/><body><p>Auto-donate coins <span style=\" font-weight:600;\">in the background</span> (without prompting) as they become eligible. </p><p>This feature requires that your wallet not be password-protected.</p></body></html>"))
-        self.chk_autodonate.setText(_translate("Instance", "Auto-donate change  without prompting"))
+        self.chk_autodonate.setText(_translate("Instance", "Auto-donate change"))
+        self.chk_1tx.setToolTip(_translate("Instance", "<html><head/><body><p>When this is <span style=\" font-weight:600;\">enabled</span>, all coins that meet the specified criteria are batched together in 1 single sending transaction.</p><p>For the cost minded: This has the advantage of conserving on <span style=\" font-weight:600;\">fees</span>.</p><p>For the privacy minded: It becomes easier to associate your receiving addresses with each other if you turn this option on. So if <span style=\" font-weight:600;\">privacy</span> is your concern, leave this option <span style=\" font-weight:600;\">disabled</span>.</p><p><span style=\" font-style:italic;\">Note: This option only appies to </span><span style=\" font-weight:600; font-style:italic;\">auto-donation mode</span><span style=\" font-style:italic;\">. </span>To control batching in manual mode, select single or multiple items from the table below.</p></body></html>"))
+        self.chk_1tx.setText(_translate("Instance", "Batch all sends as a single transacton"))
 
 from . import resources
