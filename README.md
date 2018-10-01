@@ -27,8 +27,8 @@ If you wish to encourage further development (or even just show your appreciatio
 
 1. Download the [latest release](https://github.com/cculianu/DonateSpareChange/releases).
 2. Get the latest version of the Electron Cash (either release or code from github -- make sure it has the Plugin Manager that allows addition of plugins).
-3. Either select `add plugin` or drag the zip file onto the plugin manager window.
-4. It will be installed, and enabled.
+3. From the Electron Cash application menu select `Tools -> Installed Plugins` and then click `Add Plugin`. Point the file dialog to the downloaded `donate_spare_change.zip`.
+4. This plugin will then be installed and enabled.
 
 ## Security Warning ##
 
@@ -36,12 +36,12 @@ I, Calin Culianu (cculianu) author of this plugin, affirm that there is no malic
 
 The reason this needs to be said, is that an enabled Electron Cash plugin has almost complete access and potential control over any wallets that are open.
 
-## Usage ##
+## Ultra-Brief Usage Overview ##
 
-Once you have the plugin installed and enabled, you may use it.
+Once you have the plugin installed and enabled, it should appear as a tab in your wallet window. Here is a brief overview of what to do:
 
 1. Select the `Donate Change` tab.
-2. Specify a list of recipients.
+2. Specify a list of recipients (or just use the default list which are actual real charities).
 3. Specify what "change" means to you: an amount and an age for coins defines which coins are considered for donation.
 4. You can elect to either auto-donate as coins become eligible, or manually donate. Auto mode requires a non-password protected wallet. Manual mode notifies you as coins become available and you can then manually donate them from within the `Donate Change` tab.
 
