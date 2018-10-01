@@ -26,7 +26,7 @@ If you wish to encourage further development (or even just show your appreciatio
 ## Installation ##
 
 1. Download the [latest release](https://github.com/cculianu/DonateSpareChange/releases).
-2. Get the latest version of the Electron Cash (either release or code from github -- make sure it has the Plugin Manager that allows addition of plugins).
+2. Get the latest version of the Electron Cash (either release or code from github) -- make sure it has the ability to open plugins (Electron Cash 3.2 or above).
 3. From the Electron Cash application menu select `Tools -> Installed Plugins` and then click `Add Plugin`. Point the file dialog to the downloaded `donate_spare_change.zip`.
 4. This plugin will then be installed and enabled.
 
