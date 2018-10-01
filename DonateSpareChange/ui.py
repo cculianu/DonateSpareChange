@@ -114,7 +114,7 @@ class Ui_Instance(object):
         self.fr_title.setLineWidth(1)
         self.fr_title.setObjectName("fr_title")
         self.gridLayout = QtWidgets.QGridLayout(self.fr_title)
-        self.gridLayout.setContentsMargins(10, 12, 10, 0)
+        self.gridLayout.setContentsMargins(10, 10, 10, 5)
         self.gridLayout.setObjectName("gridLayout")
         self.lbl_icon = QtWidgets.QLabel(self.fr_title)
         self.lbl_icon.setText("")
