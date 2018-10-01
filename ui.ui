@@ -528,7 +528,7 @@
          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;In order to accommodate a wide variety of wallet configurations, this plugin donates from both &amp;quot;change&amp;quot; addresses as well as &amp;quot;receiving&amp;quot; addresses. As such, it needs to decide what is &lt;span style=&quot; font-weight:600;&quot;&gt;spare change&lt;/span&gt; and what is not.&lt;/p&gt;&lt;p&gt;So here is where you specify what amount for a coin (UTXO) you consider to be &lt;span style=&quot; font-weight:600;&quot;&gt;spare change. &lt;/span&gt;&lt;/p&gt;&lt;p&gt;If a coin is below this threshold, it's considered spare change and is &lt;span style=&quot; font-weight:600;&quot;&gt;eligible&lt;/span&gt; for donation to one of the charities specified.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-style:italic;&quot;&gt;Do not specify significant amounts here unless you are rich!&lt;/span&gt;&lt;/p&gt;&lt;p&gt;(0.001 BCH aka 1 mBCH is a good threshold if you aren't sure)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
         <property name="text">
-         <string>&quot;Change&quot; amount theshold below:</string>
+         <string>&quot;Change&quot; amount threshold below:</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
