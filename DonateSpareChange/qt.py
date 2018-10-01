@@ -96,6 +96,7 @@ class Instance(QWidget, PrintError):
     sig_window_moved = pyqtSignal()
     sig_window_resized = pyqtSignal()
     sig_window_activation_changed = pyqtSignal()
+    sig_window_unblocked = pyqtSignal()
 
     def __init__(self, plugin, wallet, window):
         super().__init__()
@@ -123,12 +124,15 @@ class Instance(QWidget, PrintError):
         self.sig_user_tabbed_to_us.connect(self.on_user_tabbed_to_us)
         # connect cashaddr signal to refresh all UI addresses, etc
         self.window.cashaddr_toggled_signal.connect(self.refresh_all)
+        self.sig_window_unblocked.connect(self.ch_mgr.reload) # special case -- prefs screen may have closed and our units changed.
 
         if self.wallet.network:
             self.wallet.network.register_callback(self.on_network_updated, ['updated'])
 
         # finally, add the UI to the wallet window
         window.tabs.addTab(self, plugin.icon(), plugin.shortName())
+
+        self.engine.start()
 
     def on_network_updated(self, event, *args):
         # network thread
@@ -161,6 +165,8 @@ class Instance(QWidget, PrintError):
         if event.type() in (QEvent.WindowUnblocked, QEvent.ShowToParent) and self.wallet:
             if event.type() == QEvent.ShowToParent:
                 self.sig_user_tabbed_to_us.emit()
+            else:
+                self.sig_window_unblocked.emit()
             # if window unblocked, maybe user changed prefs. inform our managers to refresh() as maybe base_unit changed, etc.
             self.refresh_all()
         elif event.type() in (QEvent.HideToParent,):
@@ -191,6 +197,30 @@ class Instance(QWidget, PrintError):
             return self.wallet.has_password()
         except AttributeError: # happens on watching-only wallets which don't have the requiside methods
             return False
+
+    # Uncomment to test object lifetime and make sure Qt is deleting us.
+    #def __del__(self):
+    #    print("**** __del__ ****")
+
+    # called by self.plugin on wallet close - deallocate all resources and die.
+    def close(self):
+        self.print_error("Close called on an Instance")
+        self.engine.stop()
+        if self.wallet.network:
+            self.wallet.network.unregister_callback(self.on_network_updated)
+        if self.window:
+            self.window.removeEventFilter(self)
+            ix = self.window.tabs.indexOf(self)
+            if ix > -1:
+                self.window.tabs.removeTab(ix)
+                self.deleteLater() # since qt doesn't delete us, we need to explicitly delete ourselves, otherwise the QWidget lives around forever in memory
+        self.disabled = True
+        self.window, self.plugin, self.wallet, self.wallet_name, self.data, self.ch_mgr, self.co_mgr, self.cr_mgr, self.engine = (None,) * 9 # trigger object cleanup sooner rather than later!
+
+    #overrides PrintError super
+    def diagnostic_name(self):
+        return self.plugin.name + "@" + str(self.wallet_name)
+
 
     class CharitiesMgr(QObject, PrintError):
         ''' Manages the 'Charities' treewidget and associated GUI controls and per-wallet data. '''
@@ -224,9 +254,9 @@ class Instance(QWidget, PrintError):
             #import random # for testing layout
             #total = self.parent.window.format_amount(random.randint(1000,10000000), whitespaces=True)
             item = QTreeWidgetItem(self.ui.tree_charities, ["", total, name, address])
-            pointSize = 12
+            pointSize = 12 if sys.platform == 'darwin' else 10
             #if len(total.strip()) > 12:
-            #    pointSize = 11
+            #    pointSize -= 1
             item.setFont(1, QFont("Fixed", pointSize))
             item.setFlags(item.flags() | Qt.ItemIsEditable)
             chk = QCheckBox()
@@ -461,7 +491,7 @@ class Instance(QWidget, PrintError):
             self.data.set_autodonate(b, save = True)
             if was and not b:
                 self.autodonate_disabled_signal.emit()
-            
+
         def on_singletx_checked(self, b):
             self.data.set_singletx(b, save = True)
 
@@ -514,6 +544,8 @@ class Instance(QWidget, PrintError):
             self.ui.tree_coins.setColumnWidth(2, 70)
             self.brushNormal, self.brushIneligible, self.brushFrozen, self.brushEligible = QBrush(), QBrush(QColor("#999999")), QBrush(QColor("lightblue")), QBrush(QColor("darkgreen"))
             self.ui.cb_age.setHidden(True) # not used for now
+            if sys.platform != 'darwin':
+                self.ui.tree_coins.setFont(QFont('Helvetica', 10))
 
             self.reload()
 
@@ -839,13 +871,13 @@ class Instance(QWidget, PrintError):
                 d['warn_hi'] = b
                 self.put_data(d, save=save)
             except ValueError:
-                pass            
+                pass
 
     class Engine(QObject, PrintError):
         ''' The donation engine.  Encapsulates all logic of picking coins to donate, prompting user, setting up Send tab, etc '''
-        
+
         timer_interval = 10 * 1e3 # value is Qt ms value -- 10 second interval
-      
+
         def __init__(self, parent, wallet, window, co_mgr, data):
             super().__init__(parent) # QObject c'tor
             self.parent = parent # class 'Instance' instance
@@ -858,16 +890,15 @@ class Instance(QWidget, PrintError):
             self.timer = QTimer(self)
             self.timer.setInterval(self.timer_interval) # wake up every 10 seconds
             self.timer.timeout.connect(self.do_check)
-            self.timer.start()
             self.is_foregrounded = False
             self.last_notify_set = set()
             self.pending_tx_histories = dict() # dict of tx_desc -> list of HistoryEntry
             self.suppress_auto = 0
-            
+
+            self.update_rr()
+
             self.parent.sig_user_tabbed_to_us.connect(lambda: self.set_foregrounded(True))
             self.parent.sig_user_tabbed_from_us.connect(lambda: self.set_foregrounded(False))
-            
-            self.update_rr()
 
         def diagnostic_name(self): # from PrintError
             return self.__class__.__name__ + "@" + self.parent.diagnostic_name()
@@ -911,7 +942,7 @@ class Instance(QWidget, PrintError):
                         self.print_error("Auto-donate suppressed due to extant donations-related txdialog")
                 else:
                     self.notify_user(coins)
-            
+
         def newref(self): return str(binascii.hexlify(os.urandom(8))).split("'")[1]
 
         def manual_donate(self, coins):
@@ -934,7 +965,7 @@ class Instance(QWidget, PrintError):
 
             # .. aaaand Show it!
             self.window.show_transaction(tx, desc)
-            
+
             if self.data.get_autodonate():
                 ''' Hack -- in case the user hit "donate eligible" while in auto-mode, suppress auto-donation while
                     the tx dialog is up using this monkey-patching technique. ;) '''
@@ -958,13 +989,13 @@ class Instance(QWidget, PrintError):
                     import traceback
                     traceback.print_exc()
                     self.print_error("Could not suppress auto")
-                    
+
             return 1
-        
+
         def on_autodonate_disabled(self):
             self.suppress_auto = 0 # turn off 'auto' suppression because user messed with UI
 
-        
+
         def auto_donate(self, coins):
             self.print_error("Auto-donate called with ", coins)
             def on_box_is_up():
@@ -986,7 +1017,7 @@ class Instance(QWidget, PrintError):
                     self.parent.cr_mgr.refresh()
                     self.show_error(_("Wallet now has a password. Auto-donate was turned off."))
                     return
- 
+
                 bcast = None
                 network = self.wallet.network
                 if hasattr(network, 'broadcast_transaction'):
@@ -1021,11 +1052,11 @@ class Instance(QWidget, PrintError):
                     self.data.save()
                     self.window.notify(_("Auto-donated {} coins, {}").format(ct,self.window.format_amount_and_units(int(tot))))
                     self.parent.ch_mgr.reload() # so that we see the new history immediately
-                    
+
 
             show_please_wait(msg=_("Auto-Donating, please wait..."), title=self.parent.plugin.shortName(),
                              parent=None, on_shown=on_box_is_up)
-            
+
         def make_transaction(self, coins):
             totalSats = 0
             ref = self.newref()
@@ -1045,7 +1076,7 @@ class Instance(QWidget, PrintError):
                 outputs.append((TYPE_ADDRESS, address, int(amt)))
             desc += ', '.join([donee[0] for donee in donees])
             desc += " (ref: %s)" % ref
-            
+
             tx = None
             try:
                 # first make a 0-fee tx to figure out the tx size.
@@ -1072,11 +1103,11 @@ class Instance(QWidget, PrintError):
                 self.show_error(str(e) or "Unknown Error")
 
             self.data.set_roundrobin(self.rr)
-            return tx, desc, ref, donees        
+            return tx, desc, ref, donees
 
         def show_error(self, msg):
             self.window.show_error(msg = (self.parent.plugin.shortName() + ":\n\n" + msg))
-        
+
         def notify_user(self, coins):
             #self.print_error("Prompt user called with", coins)
             if not coins: return
@@ -1109,34 +1140,12 @@ class Instance(QWidget, PrintError):
 
         def do_send_tab_send(self, coins):
             self.print_error("Do send tab send called with", coins)
-            
-        def close(self):
+
+        def stop(self):
             self.timer.stop()
 
-
-    # Uncomment to test object lifetime and make sure Qt is deleting us.
-    #def __del__(self):
-    #    print("**** __del__ ****")
-
-    # called by self.plugin on wallet close - deallocate all resources and die.
-    def close(self):
-        self.print_error("Close called on an Instance")
-        self.engine.close()
-        if self.wallet.network:
-            self.wallet.network.unregister_callback(self.on_network_updated)
-        if self.window:
-            self.window.removeEventFilter(self)
-            ix = self.window.tabs.indexOf(self)
-            if ix > -1:
-                self.window.tabs.removeTab(ix)
-                self.deleteLater() # since qt doesn't delete us, we need to explicitly delete ourselves, otherwise the QWidget lives around forever in memory
-        self.disabled = True
-        self.window, self.plugin, self.wallet, self.wallet_name, self.data, self.ch_mgr, self.co_mgr, self.cr_mgr, self.engine = (None,) * 9 # trigger object cleanup sooner rather than later!
-
-    #overrides PrintError super
-    def diagnostic_name(self):
-        return self.plugin.name + "@" + str(self.wallet_name)
-
+        def start(self):
+            self.timer.start()
 
 class RoundRobin(list):
     ''' A list that is useful for a round-robin queue, allowing you to take items in the list and put them to the back.
@@ -1208,7 +1217,7 @@ def show_please_wait(msg, title=_("Please wait"), parent = None, on_shown = None
             do_later(self, 20, lambda: self.sig_shown.emit(self))
             #self.sig_shown.emit(self)
             return ret
-    
+
     dlg = MyDlg(parent=parent, title = title)
     if callable(on_shown):
         dlg.sig_shown.connect(on_shown)
