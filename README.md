@@ -1,3 +1,5 @@
+![ScreenShot](ScreenShot.png)
+
 # Donate Spare Change - Electron Cash Plugin 
 
 ![Icon](resources/icon64.png)
@@ -19,7 +21,7 @@ If you wish to encourage further development (or even just show your appreciatio
 
   bitcoincash:qphax4s4n9h60jxj2fkrjs35w2tvgd4wzvf52cgtzc
     
-![Screenshot](donate.png)
+![Donate](donate.png)
 
 ## Installation ##
 
@@ -39,8 +41,12 @@ The reason this needs to be said, is that an enabled Electron Cash plugin has al
 Once you have the plugin installed and enabled, you may use it.
 
 1. Select the `Donate Change` tab.
-2. ... More here later ...
+2. Specify a list of recipients.
+3. Specify what "change" meansa to you: an amount and an age for coins.
+4. You can elect to either auto-donate as coins become eligible, or manually donate. Auto mode requires a non-password protected wallet. Manual mode notifies you as coins become available and you can then manually donate them from within the "Donate Change" tab.
 
 ## Known Issues ##
 
-* It's not implemented yet. This is a skeleton project for now.
+* No real suport for multi-signature wallets (yet! Sorry!).
+* No testing and likely no support for hardware wallets (sorry again!).
+
