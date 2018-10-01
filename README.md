@@ -42,11 +42,11 @@ Once you have the plugin installed and enabled, you may use it.
 
 1. Select the `Donate Change` tab.
 2. Specify a list of recipients.
-3. Specify what "change" meansa to you: an amount and an age for coins.
-4. You can elect to either auto-donate as coins become eligible, or manually donate. Auto mode requires a non-password protected wallet. Manual mode notifies you as coins become available and you can then manually donate them from within the "Donate Change" tab.
+3. Specify what "change" means to you: an amount and an age for coins defines which coins are considered for donation.
+4. You can elect to either auto-donate as coins become eligible, or manually donate. Auto mode requires a non-password protected wallet. Manual mode notifies you as coins become available and you can then manually donate them from within the `Donate Change` tab.
 
 ## Known Issues ##
 
 * No real suport for multi-signature wallets (yet! Sorry!).
 * No testing and likely no support for hardware wallets (sorry again!).
-
+* If any of the above issues are an issue to you, create an issue in this github! :)
