@@ -373,10 +373,16 @@
    </item>
    <item row="0" column="0" rowspan="2">
     <widget class="QFrame" name="fr_title">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>100</height>
+      </size>
+     </property>
      <property name="maximumSize">
       <size>
        <width>16777215</width>
-       <height>100</height>
+       <height>150</height>
       </size>
      </property>
      <property name="frameShape">
