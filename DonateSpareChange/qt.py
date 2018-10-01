@@ -134,7 +134,7 @@ class Instance(QWidget, PrintError):
         window.tabs.addTab(self, plugin.icon(), plugin.shortName())
 
         self.engine.start()
-        
+
     def platform_cleanups(self):
         if sys.platform != 'darwin':
             if sys.platform == 'linux':
@@ -1099,7 +1099,7 @@ class Instance(QWidget, PrintError):
             donees = dict()
             outputs = list()
             for coin in coins:
-                donee = self.rr.front(); self.rr.to_back()
+                donee = self.rr.rotate()
                 amt = donees.get(donee, 0)
                 sats = coin['value']
                 amt += sats
@@ -1213,8 +1213,7 @@ class RoundRobin(list):
     def to_back(self, item = None):
         if item is None:
             # this call path basically says to unconditionally take whatever was at the front and put it to the back.
-            item = self[0] # IndexError possible here if caller misuing class
-            self.pop(0)
+            item = self.pop(0) # IndexError possible here if caller misuing class
             self.append(item)
         else:
             for i, elem in enumerate(self):
@@ -1225,6 +1224,8 @@ class RoundRobin(list):
             # and now put item at back. note this may end up growing the list by 1 if item was not in list.  but that's ok and is a feature.
             self.append(item)
         return self
+
+    def rotate(self): ret = self.front(); self.to_back(); return ret
 
 
 def custom_question_box(msg, title="", buttons=[_("Cancel"), _("Ok")], parent = None, icon = QMessageBox.Question):
