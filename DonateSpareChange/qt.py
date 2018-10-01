@@ -113,6 +113,7 @@ class Instance(QWidget, PrintError):
         from .ui import Ui_Instance
         self.ui = Ui_Instance()
         self.ui.setupUi(self)
+        self.platform_cleanups()
 
         self.ch_mgr = self.CharitiesMgr(self, self.ui, self.data)
         self.cr_mgr = self.CriteriaMgr(self, self.ui, self.data)
@@ -133,6 +134,32 @@ class Instance(QWidget, PrintError):
         window.tabs.addTab(self, plugin.icon(), plugin.shortName())
 
         self.engine.start()
+        
+    def platform_cleanups(self):
+        if sys.platform != 'darwin':
+            if sys.platform == 'linux':
+                stuff2adjust = [ self.ui.lbl_title, self.ui.lbl_byline, self.ui.lbl_blurb, self.ui.tree_charities, self.ui.bt_donate_selected, self.ui.bt_donate_all ]
+                for w in stuff2adjust:
+                    f = w.font()
+                    defaultFont = QApplication.instance().font()
+                    defaultFont.setPointSize(int(round(f.pointSize()*0.85)))
+                    w.setFont(defaultFont)
+            else: # windows, etc
+                stuff2adjust = [ self.ui.lbl_title, self.ui.lbl_byline, self.ui.lbl_blurb, self.ui.tree_coins ]
+                defaultFont = QApplication.instance().font()
+                def adjust(w):
+                    f = w.font()
+                    f.setFamily(defaultFont.family())
+                    w.setFont(f)
+                    childs = w.children()
+                    for child in childs:
+                        if isinstance(child, QWidget):
+                            adjust(child)
+                adjust(self)
+                for w in stuff2adjust:
+                    f = w.font()
+                    f.setPointSize(int(round(f.pointSize()*0.85)))
+                    w.setFont(f)
 
     def on_network_updated(self, event, *args):
         # network thread
