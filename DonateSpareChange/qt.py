@@ -634,7 +634,7 @@ class Instance(QWidget, PrintError):
                 lh = self.parent.wallet.get_local_height()
                 coins = self.parent.wallet.get_utxos(domain = None, exclude_frozen = False, mature = True, confirmed_only = False)
                 for c in coins:
-                    c['is_frozen'] = int(bool(self.parent.wallet.is_frozen(c['address'])))
+                    c['is_frozen'] = int(bool(self.parent.wallet.is_frozen(c['address'])) or c.get('is_frozen_coin', False))
                     c['age'] = (lh - c['height']) + 1 if c['height'] and c['height'] > 0 else -1
                     valtest = c['value'] <  amount
                     agetest = age <= 0 or ( c['age'] >= age )
