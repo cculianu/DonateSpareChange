@@ -1,3 +1,10 @@
+##!/usr/bin/env python3
+#
+# DonateSpareChange; an auto-donation plugin for Electron Cash version 3.3+
+# Author: Calin Culianu <calin.culianu@gmail.com>
+# Copyright (C) 2019 Calin Culianu
+# LICENSE: MIT
+#
 import sys, os, time, binascii, math
 
 from PyQt5.QtGui import *
@@ -10,6 +17,8 @@ from electroncash.i18n import _
 from electroncash.plugins import BasePlugin, hook
 from electroncash.util import PrintError, profiler, NotEnoughFunds, ExcessiveFee, InvalidPassword
 from electroncash_gui.qt.amountedit import BTCAmountEdit
+from electroncash_gui.qt.util import ColorScheme
+from electroncash import version
 from collections import OrderedDict, namedtuple
 
 
@@ -20,6 +29,10 @@ class Plugin(BasePlugin):
         self.instances = list() # list of 'Instance' objects
         self.gui = None # pointer to Electrum.gui singleton
         self.config = config
+        self.is_new_network_callback_api = False
+        self.is_slp = False
+        self.is_shufbeta = False
+        self._check_version()  # will set is_new_network_callback_api & is_slp
 
     def shortName(self):
         return _("Donate Change")
@@ -86,6 +99,28 @@ class Plugin(BasePlugin):
             if instance.wallet == wallet:
                 instance.on_set_label(name, text)
 
+    def _check_version(self):
+        full_ver = CopiedCode.parse_package_version(version.PACKAGE_VERSION)
+        normalized_ver = full_ver[:-1]
+        variant = full_ver[-1]
+
+        if variant == "ShufBeta":
+            self.is_shufbeta = True
+        elif variant != '':
+            self.print_error("Unknown Electron Cash variant:", variant)
+            return
+        elif normalized_ver >= (3,4) and normalized_ver < (3,5):
+            self.is_slp = True
+
+        if self.is_shufbeta:
+            min_new_api_ver = (3,9,8)
+        elif self.is_slp:
+            min_new_api_ver = (3,4,6)
+        else:
+            min_new_api_ver = (3,3,7)
+
+        self.is_new_network_callback_api = normalized_ver >= min_new_api_ver
+
 
 class Instance(QWidget, PrintError):
     ''' Encapsulates a wallet-specific instance. '''
@@ -106,8 +141,10 @@ class Instance(QWidget, PrintError):
         self.window.installEventFilter(self)
         self.wallet_name = os.path.split(wallet.storage.path)[1]
         self.data = self.DataModel(self, self.wallet.storage, self.plugin.config)
-        self.already_warned_watching = False
+        self.already_warned_incompatible = False
+        self.incompatible, self.is_slp = self.is_wallet_incompatibile()
         self.disabled = False
+        self.did_register_callback = False
 
         # do stuff to setup UI...
         from .ui import Ui_Instance
@@ -127,13 +164,23 @@ class Instance(QWidget, PrintError):
         self.window.cashaddr_toggled_signal.connect(self.refresh_all)
         self.sig_window_unblocked.connect(self.ch_mgr.refresh) # special case -- prefs screen may have closed and our units changed.
 
-        if self.wallet.network:
-            self.wallet.network.register_callback(self.on_network_updated, ['updated'])
+        self.disable_if_incompatible()
+
+        if self.wallet.network and not self.incompatible:
+            if self.plugin.is_new_network_callback_api:
+                interests = ['wallet_updated', 'blockchain_updated', 'verified2']
+            else:
+                self.print_error("Warning: Your version of Electron Cash is deprecated. Please upgrade.")
+                interests = ['updated', 'verified']
+            self.wallet.network.register_callback(self.on_network, interests)
+            self.did_register_callback = True
+
 
         # finally, add the UI to the wallet window
         window.tabs.addTab(self, plugin.icon(), plugin.shortName())
 
-        self.engine.start()
+        if not self.incompatible:
+            self.engine.start()
 
     def platform_cleanups(self):
         if sys.platform != 'darwin':
@@ -161,25 +208,61 @@ class Instance(QWidget, PrintError):
                     f.setPointSize(int(round(f.pointSize()*0.85)))
                     w.setFont(f)
 
-    def on_network_updated(self, event, *args):
+    def on_network(self, event, *args):
         # network thread
-        if event == 'updated':
+        if event == 'updated' and (not args or args[0] is self.wallet):
             self.sig_network_updated.emit() # this passes the call to the gui thread
+        elif event == 'verified': # grr.. old api sucks
+            self.sig_network_updated.emit() # this passes the call to the gui thread
+        elif event in ('wallet_updated', 'verified2') and args[0] is self.wallet:
+            self.sig_network_updated.emit() # this passes the call to the gui thread
+        elif event == 'blockchain_updated':
+            self.sig_network_updated.emit() # this passes the call to the gui thread
+
+    def is_wallet_incompatibile(self):
+        is_watching_only_method = getattr(self.wallet, 'is_watching_only', lambda: False)
+        is_slp = self.wallet.storage.get('wallet_type', '').strip().lower() == 'bip39-slp'
+        try:
+            from electroncash.keystore import Hardware_KeyStore
+            from electroncash.wallet import Multisig_Wallet
+            if (is_slp
+                or is_watching_only_method()
+                or isinstance(self.wallet, (Multisig_Wallet,))
+                or any([isinstance(k, Hardware_KeyStore) for k in self.wallet.get_keystores()])):
+                # wallet is multisig, hardware, slp, or watching only.. return True (incompatible)
+                return True, is_slp
+            else:
+                return False, False
+        except (ImportError, AttributeError) as e:
+            # Hmm. Electron Cash API change? Proceed anyway and the user will just get error messages if plugin can't spend.
+            self.print_error("Error checking wallet compatibility:",repr(e))
+        return is_watching_only_method() or is_slp, is_slp
 
     def on_user_tabbed_to_us(self):
         #self.print_error("user tabbed to us")
         warn_user = False
         try:
-            if self.wallet.is_watching_only() and not self.already_warned_watching:
-                self.already_warned_watching = True
+            if self.incompatible and not self.already_warned_incompatible:
+                self.already_warned_incompatible = True
                 warn_user = True
         except AttributeError: # Exception happens because I don't think all wallets have the is_watching_only method
             pass
+
         if warn_user:
-            self.window.show_critical(msg=_("{}\n\nThe {} plugin requires a spending wallet in order to function.").format(_("This is a watching-only wallet."), self.plugin.shortName()),
-                                      title=_("This is a watching-only wallet."),
-                                      parent=self.window)
+            def warning_popup(self):
+                if self.is_slp:
+                    msg = _("This is an incompatible wallet type.") + "\n\n" + _("SLP token wallets are not supported, as a safety feature.")
+                else:
+                    msg = _("This is an incompatible wallet type.") + "\n\n" + _("The {} plugin only supports imported private key or standard spending wallets.").format(self.plugin.shortName())
+                self.window.show_critical(msg=msg,
+                                          title=_("{} - Incompatible Wallet").format(self.plugin.shortName()),
+                                          parent=self.window)
+            do_later(self, 10, warning_popup, self)  # allow the event loop to run to paint this widget, then show the popup in 10 ms
+
+    def disable_if_incompatible(self):
+        if self.incompatible:
             self.disabled = True
+            self.print_error("Wallet is incompatible, disabling for this wallet")
             gbs = [self.ui.gb_criteria, self.ui.gb_coins, self.ui.gb_charities]
             for gb in gbs: gb.setEnabled(False) # disable all controls
 
@@ -236,8 +319,8 @@ class Instance(QWidget, PrintError):
     def close(self):
         self.print_error("Close called on an Instance")
         self.engine.stop()
-        if self.wallet.network:
-            self.wallet.network.unregister_callback(self.on_network_updated)
+        if self.did_register_callback:
+            self.wallet.network and self.wallet.network.unregister_callback(self.on_network)
         if self.window:
             self.window.removeEventFilter(self)
             ix = self.window.tabs.indexOf(self)
@@ -262,6 +345,7 @@ class Instance(QWidget, PrintError):
             self.data = data
             self.ui.tree_charities.setColumnWidth(0, 60)
             self.refresh_blocked = False
+            self.myred = "#BC1E1E" if not ColorScheme.dark_scheme else ColorScheme.RED.as_color().name()
 
             self.reload()
 
@@ -274,6 +358,12 @@ class Instance(QWidget, PrintError):
             # Context Menu Setup
             self.ui.tree_charities.setContextMenuPolicy(Qt.CustomContextMenu)
             self.ui.tree_charities.customContextMenuRequested.connect(self.on_context_menu)
+
+            # Mogrify color -- fixup for dark scheme looking weird and ColorScheme class failing us with red not looking ok.
+            bad_address_text = '''
+            <html><head/><body><p><font color="{}"><i>{}</i></font></p></body></html>
+            '''.format(self.myred, _("One or more addresses are invalid"))
+            self.ui.lbl_bad_address.setText(bad_address_text)
 
         def diagnostic_name(self): # from PrintError
             return self.__class__.__name__ + "@" + self.parent.diagnostic_name()
@@ -318,7 +408,7 @@ class Instance(QWidget, PrintError):
         def check_ok(self, item_changed = None):
             items = self.ui.tree_charities.findItems("", Qt.MatchContains, 0)
             allValid = True
-            badBrush, goodBrush = QBrush(QColor("#BC1E1E")), QApplication.instance().palette(self.ui.tree_charities).windowText()
+            badBrush, goodBrush = QBrush(QColor(self.myred)), QBrush(ColorScheme.DEFAULT.as_color())
             for i,item in enumerate(items):
                 name, address = (item.text(2), item.text(3))
                 #self.print_error("item ", i, "name=", name, "address=", address)
@@ -330,6 +420,7 @@ class Instance(QWidget, PrintError):
                     if item == item_changed:
                         item_changed.setSelected(False) # force it unselected so they see the error of their ways!
             self.ui.lbl_bad_address.setHidden(allValid)
+
 
         def on_selection_changed(self):
             self.ui.tb_minus.setEnabled(len(self.ui.tree_charities.selectedItems()))
@@ -577,7 +668,11 @@ class Instance(QWidget, PrintError):
             self.ui.tree_coins.setColumnWidth(0, 120)
             self.ui.tree_coins.setColumnWidth(1, 120)
             self.ui.tree_coins.setColumnWidth(2, 70)
-            self.brushNormal, self.brushIneligible, self.brushFrozen, self.brushEligible = QBrush(), QBrush(QColor("#999999")), QBrush(QColor("lightblue")), QBrush(QColor("darkgreen"))
+            self.brushNormal, self.brushIneligible, self.brushFrozen, self.brushEligible = (
+                QBrush(), QBrush(QColor("#999999")),
+                QBrush(QColor("lightblue") if ColorScheme.dark_scheme else QColor("#003399")),
+                QBrush(ColorScheme.GREEN.as_color() if ColorScheme.dark_scheme else QColor("darkgreen"))
+            )
             self.ui.cb_age.setHidden(True) # not used for now
             if sys.platform != 'darwin':
                 self.ui.tree_coins.setFont(QFont('Helvetica', 10))
@@ -661,12 +756,13 @@ class Instance(QWidget, PrintError):
 
         def reload(self):
             #self.print_error("reload")
-            if not self.parent.wallet: return
+            self.ui.tree_coins.clear()
+            if not self.parent.wallet or self.parent.incompatible:
+                return
             scroll_pos_val = self.ui.tree_coins.verticalScrollBar().value() # save previous scroll bar position
             oldSelCoins, oldCount = self.get_coins(from_treewidget = True, selected_only = True) # save previous selection
             oldSelNames = {self.get_name(selCoin) for selCoin in oldSelCoins}
 
-            self.ui.tree_coins.clear()
             self.ui.bt_donate_selected.setEnabled(False)
 
             coins, okcoins = self.get_coins()
@@ -961,9 +1057,8 @@ class Instance(QWidget, PrintError):
             self.rr.update(charities) #.update preserves original order for ones that are kept.
             return bool(self.rr)
 
-        @profiler
         def do_check(self):
-            if self.parent.disabled:
+            if self.parent.disabled or self.parent.incompatible:
                 return
             if not self.wallet.network or not self.wallet.network.is_connected() or not self.wallet.network.is_up_to_date() or not self.wallet.is_up_to_date():
                 self.print_error("Network not connected or wallet/network not up-to-date, will try again later...")
@@ -1277,3 +1372,69 @@ def do_later(parent, when_ms, fun, *args):
     timer.timeout.connect(timer_cb)
     timer.start(when_ms)
     return timer
+
+#####
+import re
+class CopiedCode:
+    ''' Code copied from elsewhere (EC sourcecode, etc), that we can't rely
+    on always being there across EC versions.. so we pasted it here. The
+    nature of plugins! '''
+
+    _RX_NORMALIZER = re.compile(r'(\.0+)*$')
+    _RX_VARIANT_TOKEN_PARSE = re.compile(r'^(\d+)(.+)$')
+
+    @staticmethod
+    def normalize_version(v):
+        """Used for PROTOCOL_VERSION normalization, e.g '1.4.0' -> (1,4) """
+        return tuple(int(x) for x in __class__._RX_NORMALIZER.sub('', v.strip()).split("."))
+
+    @staticmethod
+    def parse_package_version(pvstr):
+        """ Basically returns a tuple of the normalized version plus the 'variant'
+        string at the end. Eg '3.3.0' -> (3, 3, ''), '3.2.2CS' -> (3, 2, 2, 'CS'),
+        etc.
+
+        Some more examples:
+                '3.3.5CS' -> (3, 3, 5, 'CS')
+                '3.4.5_iOS' -> (3, 4, 5, '_iOS')
+                '3.3.5' -> (3, 3, 5, '')
+                '3.3' -> (3, 3, '')
+                '3.3.0' -> (3, 3, '')
+                '   3.2.2.0 ILikeSpaces ' -> (3, 2, 2, 'ILikeSpaces')
+        Note how 0 fields at the end of the version get normalized with the 0 lopped off:
+                '3.3.0' -> (3, 3, '')
+                '3.5.0.0.0' -> (3, 5, '')
+                '3.5.0.0.0_iOS' -> (3, 5, '_iOS')
+        ... and, finally: The last element is *always* going to be present as
+        a string, the 'variant'. The 'variant' will be the empty string '' if
+        this is the default Electron Cash. If you don't like this heterogeneity of
+        types in a tuple, take the retVal[:-1] slice of the array to toss it
+        (or just use normalize_version above).
+        """
+        def raise_(e=None):
+            exc = ValueError('Failed to parse package version for: "{}"'.format(pvstr))
+            if e: raise exc from e
+            else: raise exc
+        toks = [x.strip() for x in pvstr.split(".")]
+        if not toks:
+            raise_()
+        if toks[-1].isdigit():
+            # Missing 'variant' at end.. add the default '' variant.
+            toks.append('')
+        else:
+            # had 'variant' at end, parse it.
+            m = __class__._RX_VARIANT_TOKEN_PARSE.match(toks[-1])
+            if m:
+                # pop off end and...
+                toks[-1:] = [m.group(1), # add the digit portion back (note it's still a str at this point)
+                             m.group(2).strip()] # add the leftovers as the actual variant
+            else:
+                raise_()
+        try:
+            # make sure everything but the last element is an int.
+            toks[:-1] = [int(x) for x in toks[:-1]]
+        except ValueError as e:
+            raise_(e)
+        # .. and.. finally: Normalize it! (lopping off zeros at the end)
+        toks[:-1] = __class__.normalize_version('.'.join(str(t) for t in toks[:-1]))
+        return tuple(toks)

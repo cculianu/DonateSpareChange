@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 #
 # PopupWidget and PopupLabel
 # by Calin Culianu <calin.culianu@gmail.com>
