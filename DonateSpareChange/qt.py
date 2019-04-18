@@ -882,7 +882,7 @@ class Instance(QWidget, PrintError):
                     (True, "eatBCH", "pp8skudq3x5hzw8ew7vzsw8tn4k8wxsqsv0lt0mf3g"),
                     (True, "eatBCH_SS", "qrsrvtc95gg8rrag7dge3jlnfs4j9pe0ugrmeml950"),
                     (True, "Coins4Clothes", "qzx4tqcldmvs4up9mewkf3ru0z6vy9wm6qm782fwla"),
-                    (True, "Cashshuffle", "qqqxxmjyavdkwdj6npa5w6xl0fzq3wc5furaqdpl59"),
+                    (True, "CashShuffle", "qqqxxmjyavdkwdj6npa5w6xl0fzq3wc5furaqdpl59"),
                     (True, "Electron-Cash", "qz4wq9m860zr5p2nfdpttm5ymdqdyt3psc95qjagae"),
                     (False, "Calin", "qplw0d304x9fshz420lkvys2jxup38m9symky6k028"),
                 ]
