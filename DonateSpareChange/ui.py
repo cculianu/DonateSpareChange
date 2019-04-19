@@ -250,7 +250,7 @@ class Ui_Instance(object):
         self.tb_plus.setText(_translate("Instance", "➕"))
         self.lbl_byline.setToolTip(_translate("Instance", "<html><head/><body><p><pre>https://github.com/cculianu/DonateSpareChange</pre></p></body></html>"))
         self.lbl_byline.setText(_translate("Instance", "<html><head/><body><p>by <a href=\"https://github.com/cculianu/DonateSpareChange\">Calin Culianu</a><br/></p></body></html>"))
-        self.lbl_title.setText(_translate("Instance", "Donate Spare Change 1.2"))
+        self.lbl_title.setText(_translate("Instance", "Donate Spare Change 1.3"))
         self.lbl_blurb.setText(_translate("Instance", "<html><head/><body><p><span style=\" font-size:12pt;\">Automatically donate your spare change to the destinations of your choice.</span></p></body></html>"))
         self.gb_criteria.setTitle(_translate("Instance", "Specify Criteria for Donation"))
         self.lbl_amount.setToolTip(_translate("Instance", "<html><head/><body><p>In order to accommodate a wide variety of wallet configurations, this plugin donates from both &quot;change&quot; addresses as well as &quot;receiving&quot; addresses. As such, it needs to decide what is <span style=\" font-weight:600;\">spare change</span> and what is not.</p><p>So here is where you specify what amount for a coin (UTXO) you consider to be <span style=\" font-weight:600;\">spare change. </span></p><p>If a coin is below this threshold, it\'s considered spare change and is <span style=\" font-weight:600;\">eligible</span> for donation to one of the charities specified.</p><p><span style=\" font-style:italic;\">Do not specify significant amounts here unless you are rich!</span></p><p>(0.001 BCH aka 1 mBCH is a good threshold if you aren\'t sure)</p></body></html>"))

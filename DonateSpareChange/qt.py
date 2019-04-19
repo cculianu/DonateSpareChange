@@ -841,15 +841,20 @@ class Instance(QWidget, PrintError):
 
         def on_donate_selected(self):
             coins, okcount = self.get_coins(from_treewidget = True, eligible_only = True, selected_only = True)
+            self._do_manual_donate(coins)
+
+        def _do_manual_donate(self, coins):
             if coins:
-                if not self.parent.engine.manual_donate(coins):
+                is_batched = self.data.get_singletx()
+                if not is_batched and len(coins) > 1:
+                    if not self.parent.window.question(_("You are about to create {} separate transaction windows. You will need to sign and broadcast each one.\n\nProceed?").format(len(coins))):
+                        return
+                if not self.parent.engine.manual_donate(coins, batched=is_batched):
                     self.parent.window.show_error(_("No charities are enabled!"))
 
         def on_donate_all(self):
             coins, okcount = self.get_coins(from_treewidget = True, eligible_only = True, selected_only = False)
-            if coins:
-                if not self.parent.engine.manual_donate(coins):
-                    self.parent.window.show_error(_("No charities are enabled!"))
+            self._do_manual_donate(coins)
 
 
     # nested class.. handles writing our data dict to/from persisten store
@@ -1077,50 +1082,56 @@ class Instance(QWidget, PrintError):
 
         def newref(self): return str(binascii.hexlify(os.urandom(8))).split("'")[1]
 
-        def manual_donate(self, coins):
-            ''' NB: for now this always makes 1 big batched tx '''
+        def manual_donate(self, coins, batched=True):
+            ''' This will either make 1 big batched TX or pop up many tx windows '''
             if not self.update_rr() or not coins:
                 return 0
-            tx, desc, ref, donees = self.make_transaction(coins)
-            if not tx:
-                self.show_error(_("There was a problem creating the transaction. Please contact the developer."))
-                return -1
-            i = 0
-            for donee,amt in donees.items():
-                name,address = donee
-                # address name amount ref txout
-                hentry = self.data.HistoryEntry(address,name,amt,ref,str(i))
-                l = self.pending_tx_histories.get(desc,list())
-                l.append(hentry)
-                self.pending_tx_histories[desc] = l
-                i += 1
+            list_of_coins = []
+            if batched:
+                list_of_coins = [coins]
+            else:
+                list_of_coins = [[c] for c in coins]
+            for coins in list_of_coins:
+                tx, desc, ref, donees = self.make_transaction(coins)
+                if not tx:
+                    self.show_error(_("There was a problem creating the transaction. Please contact the developer."))
+                    return -1
+                i = 0
+                for donee,amt in donees.items():
+                    name,address = donee
+                    # address name amount ref txout
+                    hentry = self.data.HistoryEntry(address,name,amt,ref,str(i))
+                    l = self.pending_tx_histories.get(desc,list())
+                    l.append(hentry)
+                    self.pending_tx_histories[desc] = l
+                    i += 1
 
-            # .. aaaand Show it!
-            self.window.show_transaction(tx, desc)
+                # .. aaaand Show it!
+                self.window.show_transaction(tx, desc)
 
-            if self.data.get_autodonate():
-                ''' Hack -- in case the user hit "donate eligible" while in auto-mode, suppress auto-donation while
-                    the tx dialog is up using this monkey-patching technique. ;) '''
+                if self.data.get_autodonate():
+                    ''' Hack -- in case the user hit "donate eligible" while in auto-mode, suppress auto-donation while
+                        the tx dialog is up using this monkey-patching technique. ;) '''
 
-                try:
-                    from electroncash_gui.qt.transaction_dialog import dialogs
-                    txdlg = dialogs[-1]
-                    origMethod = txdlg.closeEvent
-                    def myCloseEvent(event):
-                        if not self.parent or not self.parent.plugin:
+                    try:
+                        from electroncash_gui.qt.transaction_dialog import dialogs
+                        txdlg = dialogs[-1]
+                        origMethod = txdlg.closeEvent
+                        def myCloseEvent(event):
+                            if not self.parent or not self.parent.plugin:
+                                origMethod(event)
+                                return # early return -- plugin was closed!
+                            self.print_error("monkey-patched tx dialog close called", event)
                             origMethod(event)
-                            return # early return -- plugin was closed!
-                        self.print_error("monkey-patched tx dialog close called", event)
-                        origMethod(event)
-                        if event.isAccepted() and self.suppress_auto:
-                            self.suppress_auto -= 1
-                            self.print_error("tx dialog close suppress_auto =", self.suppress_auto)
-                    txdlg.closeEvent = myCloseEvent
-                    self.suppress_auto += 1
-                except (AttributeError, ImportError):
-                    import traceback
-                    traceback.print_exc()
-                    self.print_error("Could not suppress auto")
+                            if event.isAccepted() and self.suppress_auto:
+                                self.suppress_auto -= 1
+                                self.print_error("tx dialog close suppress_auto =", self.suppress_auto)
+                        txdlg.closeEvent = myCloseEvent
+                        self.suppress_auto += 1
+                    except (AttributeError, ImportError):
+                        import traceback
+                        traceback.print_exc()
+                        self.print_error("Could not suppress auto")
 
             return 1
 
