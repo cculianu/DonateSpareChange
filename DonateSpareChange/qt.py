@@ -24,6 +24,8 @@ from collections import OrderedDict, namedtuple
 
 class Plugin(BasePlugin):
 
+    HAS_SCHNORR_API = None
+
     def __init__(self, parent, config, name):
         super().__init__(parent, config, name)
         self.instances = list() # list of 'Instance' objects
@@ -81,6 +83,9 @@ class Plugin(BasePlugin):
         """
         Hook called when a wallet is loaded and a window opened for it.
         """
+        if Plugin.HAS_SCHNORR_API is None:
+            Plugin.HAS_SCHNORR_API = bool(getattr(window, 'is_schnorr_enabled', False))
+            self.print_error("Schnorr API present in this Electron Cash:", "YES" if Plugin.HAS_SCHNORR_API else "No")
         self.instances.append(Instance(self, wallet, window))
 
     @hook
@@ -1021,6 +1026,7 @@ class Instance(QWidget, PrintError):
             self.parent = parent # class 'Instance' instance
             self.wallet = wallet
             self.window = window
+            self._is_schnorr_enabled_func = window.is_schnorr_enabled if Plugin.HAS_SCHNORR_API else lambda: False
             self.data = data
             self.co_mgr = co_mgr
             self.parent.cr_mgr.autodonate_disabled_signal.connect(self.on_autodonate_disabled)
@@ -1222,8 +1228,11 @@ class Instance(QWidget, PrintError):
 
             tx = None
             try:
+                schnorr_kwargs={}
+                if Plugin.HAS_SCHNORR_API:
+                    schnorr_kwargs['sign_schnorr'] = self._is_schnorr_enabled_func()
                 # first make a 0-fee tx to figure out the tx size.
-                tx0 = self.wallet.make_unsigned_transaction(inputs=coins, outputs=outputs, config=self.window.config, fixed_fee=0)
+                tx0 = self.wallet.make_unsigned_transaction(inputs=coins, outputs=outputs, config=self.window.config, fixed_fee=0, **schnorr_kwargs)
                 size = tx0.estimated_size()
                 # next, make each output pay a portion of the fee to reach 1.0 sats/B
                 each_fee = int(math.ceil(size / len(outputs)))
@@ -1234,7 +1243,7 @@ class Instance(QWidget, PrintError):
                 #print("revised outputs",outputs)
                 if any([ bool(o[2] <= 0) for o in outputs]):
                     raise NotEnoughFunds
-                tx = self.wallet.make_unsigned_transaction(inputs=coins, outputs=outputs, config=self.window.config, fixed_fee=each_fee*len(outputs))
+                tx = self.wallet.make_unsigned_transaction(inputs=coins, outputs=outputs, config=self.window.config, fixed_fee=each_fee*len(outputs), **schnorr_kwargs)
             except NotEnoughFunds:
                 self.show_error(_("Insufficient funds"))
             except ExcessiveFee:
