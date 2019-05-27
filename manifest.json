@@ -1,6 +1,6 @@
 {
     "display_name": "Donate Spare Change",
-    "version": "1.4",
+    "version": "1.5",
     "description": "Automatically donate change outputs to charities (or any address) of our choice, to protect your privacy and also go good!",
     "project_url": "https://github.com/cculianu/DonateSpareChange",
     "minimum_ec_version": "3.3",

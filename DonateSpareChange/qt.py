@@ -84,7 +84,7 @@ class Plugin(BasePlugin):
         Hook called when a wallet is loaded and a window opened for it.
         """
         if Plugin.HAS_SCHNORR_API is None:
-            Plugin.HAS_SCHNORR_API = bool(getattr(window, 'is_schnorr_enabled', False))
+            Plugin.HAS_SCHNORR_API = bool(getattr(window, 'is_schnorr_enabled', False) or getattr(window.wallet, 'is_schnorr_enabled', False))
             self.print_error("Schnorr API present in this Electron Cash:", "YES" if Plugin.HAS_SCHNORR_API else "No")
         self.instances.append(Instance(self, wallet, window))
 
@@ -1026,7 +1026,15 @@ class Instance(QWidget, PrintError):
             self.parent = parent # class 'Instance' instance
             self.wallet = wallet
             self.window = window
-            self._is_schnorr_enabled_func = window.is_schnorr_enabled if Plugin.HAS_SCHNORR_API else lambda: False
+            if Plugin.HAS_SCHNORR_API:
+                if getattr(window, 'is_schnorr_enabled', None): # 4.0.3 & 4.0.4 API
+                    self._is_schnorr_enabled_func = window.is_schnorr_enabled
+                elif getattr(window.wallet, 'is_schnorr_enabled', None): # 4.0.4-git and beyond API
+                    self._is_schnorr_enabled_func = window.wallet.is_schnorr_enabled
+                else:
+                    raise RuntimeError("Cannot find 'is_schnorr_enabled' function -- FIXME")
+            else:
+                self._is_schnorr_enabled_func = lambda: False
             self.data = data
             self.co_mgr = co_mgr
             self.parent.cr_mgr.autodonate_disabled_signal.connect(self.on_autodonate_disabled)
