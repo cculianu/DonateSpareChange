@@ -894,6 +894,17 @@ class Instance(QWidget, PrintError):
                     (True, "Coins4Clothes", "qzx4tqcldmvs4up9mewkf3ru0z6vy9wm6qm782fwla"),
                     (True, "CashShuffle", "qqqxxmjyavdkwdj6npa5w6xl0fzq3wc5furaqdpl59"),
                     (True, "Electron-Cash", "qz4wq9m860zr5p2nfdpttm5ymdqdyt3psc95qjagae"),
+                    (True, "bchd", "qrhea03074073ff3zv9whh0nggxc7k03ssh8jv9mkx"),
+                    (True, "CashShuffle", "qqqxxmjyavdkwdj6npa5w6xl0fzq3wc5furaqdpl59"),
+                    (True, "CrescentCash", "qptnypuugy29lttleggl7l0vpls0vg295q9nsavw6g"),
+                    (True, "FloweeTheHub", "qpgn5ka4jptc98a9ftycvujxx33e79nxuqlz5mvxns"),
+                    (True, "Bitcoin-ABC", "qqeht8vnwag20yv8dvtcrd4ujx09fwxwsqqqw93w88"),
+                    (True, "Chaintip", "qpznjz9qd0fl5fe9sfrkuy8rznt8qw066yvkgsezy5"),
+                    (True, "cash.coin.dance", "qzqh7ej3rdrw6r32guzdg0x4a275hqwjkgtmjazc64"),
+                    (True, "Gitcash", "qrdf9w034w9l7lgu7yt2tem7403paeky2geytpuccn"),
+                    (True, "CollinEnstad", "qq78ewva4a6unvup9jruw33gk3f5ynvupvvk2ytx93"),
+                    (True, "LazyFox", "qrsez9gfpfrnjf6jrmx67y0xuqth3vrgyc5s89f4w5"),
+                    (True, "CashAddress", "qp4atx0z6h6atuzchuaqssnkdqag95ecdqtt5nx8z8"),
                     (False, "Calin", "qplw0d304x9fshz420lkvys2jxup38m9symky6k028"),
                 ]
                 change_def = (10500, 72, 0) # sats, blocks, age_type(not used yet)
