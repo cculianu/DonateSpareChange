@@ -901,7 +901,6 @@ class Instance(QWidget, PrintError):
                     (False, "FloweeTheHub", "qpgn5ka4jptc98a9ftycvujxx33e79nxuqlz5mvxns"),
                     (False, "Bitcoin-ABC", "qqeht8vnwag20yv8dvtcrd4ujx09fwxwsqqqw93w88"),
                     (False, "Chaintip", "qpznjz9qd0fl5fe9sfrkuy8rznt8qw066yvkgsezy5"),
-                    (False, "cash.coin.dance", "qzqh7ej3rdrw6r32guzdg0x4a275hqwjkgtmjazc64"),
                     (False, "Gitcash", "qrdf9w034w9l7lgu7yt2tem7403paeky2geytpuccn"),
                     (False, "CashAddress", "qp4atx0z6h6atuzchuaqssnkdqag95ecdqtt5nx8z8"),
                 ]
