@@ -896,13 +896,6 @@ class Instance(QWidget, PrintError):
                     (False, "Calin", "qplw0d304x9fshz420lkvys2jxup38m9symky6k028"),
                     (False, "CashShuffle", "qqqxxmjyavdkwdj6npa5w6xl0fzq3wc5furaqdpl59"),
                     (False, "Electron-Cash", "qz4wq9m860zr5p2nfdpttm5ymdqdyt3psc95qjagae"),
-                    (False, "bchd", "qrhea03074073ff3zv9whh0nggxc7k03ssh8jv9mkx"),
-                    (False, "CrescentCash", "qptnypuugy29lttleggl7l0vpls0vg295q9nsavw6g"),
-                    (False, "FloweeTheHub", "qpgn5ka4jptc98a9ftycvujxx33e79nxuqlz5mvxns"),
-                    (False, "Bitcoin-ABC", "qqeht8vnwag20yv8dvtcrd4ujx09fwxwsqqqw93w88"),
-                    (False, "Chaintip", "qpznjz9qd0fl5fe9sfrkuy8rznt8qw066yvkgsezy5"),
-                    (False, "Gitcash", "qrdf9w034w9l7lgu7yt2tem7403paeky2geytpuccn"),
-                    (False, "CashAddress", "qp4atx0z6h6atuzchuaqssnkdqag95ecdqtt5nx8z8"),
                 ]
                 change_def = (10500, 72, 0) # sats, blocks, age_type(not used yet)
                 d['charities'] = charities
