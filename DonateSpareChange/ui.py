@@ -2,11 +2,13 @@
 
 # Form implementation generated from reading ui file 'ui.ui'
 #
-# Created by: PyQt5 UI code generator 5.11.3
+# Created by: PyQt5 UI code generator 5.13.1
 #
 # WARNING! All changes made in this file will be lost!
 
+
 from PyQt5 import QtCore, QtGui, QtWidgets
+
 
 class Ui_Instance(object):
     def setupUi(self, Instance):
@@ -96,12 +98,22 @@ class Ui_Instance(object):
         self.gridLayout_3.addItem(spacerItem3, 1, 1, 1, 1)
         self.tb_minus = QtWidgets.QToolButton(self.gb_charities)
         self.tb_minus.setEnabled(False)
-        self.tb_minus.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+        self.tb_minus.setMinimumSize(QtCore.QSize(24, 24))
+        self.tb_minus.setBaseSize(QtCore.QSize(16, 16))
+        icon = QtGui.QIcon()
+        icon.addPixmap(QtGui.QPixmap(":/DonateSpareChange/resources/salmon_minus.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.tb_minus.setIcon(icon)
+        self.tb_minus.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
         self.tb_minus.setAutoRaise(True)
         self.tb_minus.setObjectName("tb_minus")
         self.gridLayout_3.addWidget(self.tb_minus, 1, 2, 1, 1)
         self.tb_plus = QtWidgets.QToolButton(self.gb_charities)
-        self.tb_plus.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+        self.tb_plus.setMinimumSize(QtCore.QSize(24, 24))
+        icon1 = QtGui.QIcon()
+        icon1.addPixmap(QtGui.QPixmap(":/DonateSpareChange/resources/circled_plus.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.tb_plus.setIcon(icon1)
+        self.tb_plus.setIconSize(QtCore.QSize(16, 16))
+        self.tb_plus.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
         self.tb_plus.setAutoRaise(True)
         self.tb_plus.setObjectName("tb_plus")
         self.gridLayout_3.addWidget(self.tb_plus, 1, 3, 1, 1)
@@ -245,12 +257,10 @@ class Ui_Instance(object):
         self.lbl_bad_address.setToolTip(_translate("Instance", "One or more addresses are invalid"))
         self.lbl_bad_address.setText(_translate("Instance", "<html><head/><body><p><font color=#BC1E1E><i>One or more addresses are invalid</i></font></p></body></html>"))
         self.tb_minus.setToolTip(_translate("Instance", "<html><head/><body><p>Delete selected recipients</p></body></html>"))
-        self.tb_minus.setText(_translate("Instance", "➖"))
         self.tb_plus.setToolTip(_translate("Instance", "<html><head/><body><p>Add a new recipient</p></body></html>"))
-        self.tb_plus.setText(_translate("Instance", "➕"))
         self.lbl_byline.setToolTip(_translate("Instance", "<html><head/><body><p><pre>https://github.com/cculianu/DonateSpareChange</pre></p></body></html>"))
         self.lbl_byline.setText(_translate("Instance", "<html><head/><body><p>by <a href=\"https://github.com/cculianu/DonateSpareChange\">Calin Culianu</a><br/></p></body></html>"))
-        self.lbl_title.setText(_translate("Instance", "Donate Spare Change 1.6"))
+        self.lbl_title.setText(_translate("Instance", "Donate Spare Change 1.61"))
         self.lbl_blurb.setText(_translate("Instance", "<html><head/><body><p><span style=\" font-size:12pt;\">Automatically donate your spare change to the destinations of your choice.</span></p></body></html>"))
         self.gb_criteria.setTitle(_translate("Instance", "Specify Criteria for Donation"))
         self.lbl_amount.setToolTip(_translate("Instance", "<html><head/><body><p>In order to accommodate a wide variety of wallet configurations, this plugin donates from both &quot;change&quot; addresses as well as &quot;receiving&quot; addresses. As such, it needs to decide what is <span style=\" font-weight:600;\">spare change</span> and what is not.</p><p>So here is where you specify what amount for a coin (UTXO) you consider to be <span style=\" font-weight:600;\">spare change. </span></p><p>If a coin is below this threshold, it\'s considered spare change and is <span style=\" font-weight:600;\">eligible</span> for donation to one of the charities specified.</p><p><span style=\" font-style:italic;\">Do not specify significant amounts here unless you are rich!</span></p><p>(0.001 BCH aka 1 mBCH is a good threshold if you aren\'t sure)</p></body></html>"))
@@ -268,5 +278,4 @@ class Ui_Instance(object):
         self.chk_autodonate.setText(_translate("Instance", "Auto-donate change"))
         self.chk_1tx.setToolTip(_translate("Instance", "<html><head/><body><p>When this is <span style=\" font-weight:600;\">enabled</span>, all coins that meet the specified criteria are batched together in 1 single sending transaction.</p><p>For the cost minded: This has the advantage of conserving on <span style=\" font-weight:600;\">fees</span>.</p><p>For the privacy minded: It becomes easier to associate your receiving addresses with each other if you turn this option on. So if <span style=\" font-weight:600;\">privacy</span> is your concern, leave this option <span style=\" font-weight:600;\">disabled</span>.</p><p><span style=\" font-style:italic;\">Note: This option only appies to </span><span style=\" font-weight:600; font-style:italic;\">auto-donation mode</span><span style=\" font-style:italic;\">. </span>To control batching in manual mode, select single or multiple items from the table below.</p></body></html>"))
         self.chk_1tx.setText(_translate("Instance", "Batch all sends as a single transacton"))
-
 from . import resources

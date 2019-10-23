@@ -2,6 +2,8 @@
   <qresource prefix="/DonateSpareChange" >
     <file>resources/icon.png</file>
     <file>resources/icon64.png</file>
+    <file>resources/salmon_minus.png</file>
+    <file>resources/circled_plus.png</file>
   </qresource>
 </RCC>
 
