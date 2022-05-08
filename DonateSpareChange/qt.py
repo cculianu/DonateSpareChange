@@ -1020,7 +1020,7 @@ class Instance(QWidget, PrintError):
     class Engine(QObject, PrintError):
         ''' The donation engine.  Encapsulates all logic of picking coins to donate, prompting user, setting up Send tab, etc '''
 
-        timer_interval = 10 * 1e3 # value is Qt ms value -- 10 second interval
+        timer_interval = 10000 # value is Qt ms value -- 10 second interval
 
         def __init__(self, parent, wallet, window, co_mgr, data):
             super().__init__(parent) # QObject c'tor
