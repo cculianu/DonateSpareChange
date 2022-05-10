@@ -475,7 +475,7 @@
          </font>
         </property>
         <property name="text">
-         <string>Donate Spare Change 1.6</string>
+         <string>Donate Spare Change 1.7</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
